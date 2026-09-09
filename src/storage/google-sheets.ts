@@ -25,6 +25,10 @@ function safeSheetName(name: string): string {
   return `'${name.replace(/'/g, "''")}'`;
 }
 
+function homeAddress(home: Pick<HomeRecord, 'stage' | 'block' | 'house'>): string {
+  return `${home.stage}:${home.block}:${home.house}`;
+}
+
 export class GoogleSheetsPaymentStore implements PaymentStore {
   private readonly spreadsheetId: string;
   private readonly sheets: sheets_v4.Sheets;
@@ -49,14 +53,19 @@ export class GoogleSheetsPaymentStore implements PaymentStore {
     return (response.data.values ?? []) as unknown[][];
   }
 
-  private async append(sheet: string, values: unknown[]): Promise<void> {
+  private async appendRows(sheet: string, values: unknown[][]): Promise<void> {
+    if (!values.length) return;
     await this.sheets.spreadsheets.values.append({
       spreadsheetId: this.spreadsheetId,
       range: `${safeSheetName(sheet)}!A:A`,
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
-      requestBody: { values: [values] },
+      requestBody: { values },
     });
+  }
+
+  private async append(sheet: string, values: unknown[]): Promise<void> {
+    await this.appendRows(sheet, [values]);
   }
 
   private async replaceRow(sheet: string, rowNumber: number, values: unknown[]): Promise<void> {
@@ -139,10 +148,27 @@ export class GoogleSheetsPaymentStore implements PaymentStore {
   }
 
   async saveHome(home: HomeRecord): Promise<void> {
-    const homes = await this.listHomes();
-    if (homes.some((item) => item.id === home.id)) throw new Error('home_already_exists');
-    if (homes.some((item) => item.stage === home.stage && item.block === home.block && item.house === home.house)) throw new Error('home_address_already_exists');
-    await this.append(SHEETS.homes, homeToRow(home));
+    await this.saveHomes([home]);
+  }
+
+  async saveHomes(homes: readonly HomeRecord[]): Promise<void> {
+    if (!homes.length) return;
+    const existing = await this.listHomes();
+    const existingIds = new Set(existing.map((home) => home.id));
+    const existingAddresses = new Set(existing.map(homeAddress));
+    const batchIds = new Set<string>();
+    const batchAddresses = new Set<string>();
+
+    for (const home of homes) {
+      if (existingIds.has(home.id) || batchIds.has(home.id)) throw new Error('home_already_exists');
+      const address = homeAddress(home);
+      if (existingAddresses.has(address) || batchAddresses.has(address)) throw new Error('home_address_already_exists');
+      batchIds.add(home.id);
+      batchAddresses.add(address);
+    }
+
+    // One append request after the full batch is validated avoids per-row partial imports.
+    await this.appendRows(SHEETS.homes, homes.map((home) => homeToRow(home)));
   }
 
   async updateHome(home: HomeRecord): Promise<void> {
