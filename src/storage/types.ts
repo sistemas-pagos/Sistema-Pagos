@@ -8,6 +8,8 @@ export interface PaymentStore {
 
   listHomes(): Promise<HomeRecord[]>;
   saveHome(home: HomeRecord): Promise<void>;
+  /** Validate the whole batch before writing so imports do not partially apply. */
+  saveHomes(homes: readonly HomeRecord[]): Promise<void>;
   updateHome(home: HomeRecord): Promise<void>;
 
   getPendingByPhone(phone: string): Promise<PendingConversation | undefined>;
