@@ -5,6 +5,10 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function homeAddress(home: Pick<HomeRecord, 'stage' | 'block' | 'house'>): string {
+  return `${home.stage}:${home.block}:${home.house}`;
+}
+
 export class MemoryPaymentStore implements PaymentStore {
   private payments = new Map<string, PaymentRecord>();
   private homes = new Map<string, HomeRecord>();
@@ -47,10 +51,23 @@ export class MemoryPaymentStore implements PaymentStore {
   }
 
   async saveHome(home: HomeRecord): Promise<void> {
-    if (this.homes.has(home.id)) throw new Error('home_already_exists');
-    const duplicate = Array.from(this.homes.values()).some((item) => item.stage === home.stage && item.block === home.block && item.house === home.house);
-    if (duplicate) throw new Error('home_address_already_exists');
-    this.homes.set(home.id, clone(home));
+    await this.saveHomes([home]);
+  }
+
+  async saveHomes(homes: readonly HomeRecord[]): Promise<void> {
+    const existingAddresses = new Set(Array.from(this.homes.values(), homeAddress));
+    const batchIds = new Set<string>();
+    const batchAddresses = new Set<string>();
+
+    for (const home of homes) {
+      if (this.homes.has(home.id) || batchIds.has(home.id)) throw new Error('home_already_exists');
+      const address = homeAddress(home);
+      if (existingAddresses.has(address) || batchAddresses.has(address)) throw new Error('home_address_already_exists');
+      batchIds.add(home.id);
+      batchAddresses.add(address);
+    }
+
+    homes.forEach((home) => this.homes.set(home.id, clone(home)));
   }
 
   async updateHome(home: HomeRecord): Promise<void> {
