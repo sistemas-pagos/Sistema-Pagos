@@ -25,6 +25,7 @@ Do not modify, merge, close, comment on, or use another project's PR/workflow as
 - A home counts as paid only after its payment for that service month is `VERIFICADO`; keep received and verified money separate in accounting/dashboard semantics.
 - A bank reference is a matching/risk signal, not a globally unique payment identifier. Repeated references go to review unless a stronger exact-duplicate signal exists.
 - Meta retries with the same `message_id` are idempotent and silent. Exact file resends are duplicate signals. Cross-sender exact-file reuse goes to review.
+- Receipt images are **not retained** in the current MVP. Download bytes only for validation/hash/OCR/parser during the request, persist the SHA-256 and structured payment data, and discard the image. Do not persist `media_id`, `receipt_file_id`, Drive/Blob/S3 copies, or public/private receipt URLs unless the client explicitly changes this policy later.
 - `RECIBIDO/PENDIENTE_VERIFICACION` is distinct from `VERIFICADO`. A human bank check or a future trusted bank-side reconciliation source is required for verification.
 - Manual verification must not bypass unresolved amount exceptions, service-period conflicts, or evidence that the same bank movement is already claimed/reused.
 - Future automated reconciliation must require a stable bank-side movement identifier and persist it so the same movement cannot verify more than one payment across runs.
@@ -32,7 +33,7 @@ Do not modify, merge, close, comment on, or use another project's PR/workflow as
 
 ## Data and security
 
-- Production Google Sheets/Drive resources remain private and server-side.
+- Production Google Sheets remains private and server-side; Google Drive is not required while receipt retention is disabled.
 - WhatsApp webhook signature validation and file type/size/magic-byte validation must remain fail-closed.
 - Never put Meta/Google/BAC credentials in Git, docs, fixtures, logs, screenshots, or public demo output.
 - Preserve production/preview separation and the monorepo secret ownership defined in `.github/project-scopes.yml`.
