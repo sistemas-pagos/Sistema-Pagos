@@ -7,8 +7,10 @@ export const dynamic = 'force-dynamic';
 
 const money = (value: number) => `L${value.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default async function HomesAdminPage() {
+export default async function HomesAdminPage({ searchParams }: { searchParams: Promise<{ imported?: string }> }) {
   if (!(await isAdminAuthenticated())) redirect('/login');
+  const params = await searchParams;
+  const imported = Number.parseInt(params.imported ?? '', 10);
   const store = await getPaymentStore();
   const homes = (await store.listHomes()).sort((a, b) => a.stage - b.stage || a.block - b.block || a.house - b.house);
   const active = homes.filter((home) => home.active);
@@ -32,7 +34,27 @@ export default async function HomesAdminPage() {
         <div className="kpi"><span>Cuota esperada activa</span><strong>{money(expected)}</strong><small>Según cuota de cada vivienda</small></div>
       </section>
 
-      <div className="section-head"><div><p className="eyebrow">Nueva vivienda</p><h2>Agregar a la base maestra</h2></div><p>La identidad E/B/C queda fija para proteger el historial.</p></div>
+      {Number.isInteger(imported) && imported > 0 && <div className="notice">Se importaron {imported} viviendas. La carga fue validada completa antes de escribirse.</div>}
+
+      <div className="section-head">
+        <div><p className="eyebrow">Carga inicial</p><h2>Importar varias viviendas</h2></div>
+        <p>Pega directamente desde Excel/Sheets o usa CSV. Si omites cuota, se usa L150.</p>
+      </div>
+      <form className="home-import-form" method="post" action="/api/admin/homes/import">
+        <label htmlFor="housing-import">Datos de viviendas</label>
+        <textarea
+          id="housing-import"
+          name="data"
+          required
+          rows={9}
+          spellCheck={false}
+          placeholder={'etapa,bloque,casa,cuota,responsable,activa,fecha_alta\n1,1,1,150,Persona Demo A,si,2026-08-01\n1,1,2,150,Persona Demo B,si,2026-08-01'}
+        />
+        <p>Encabezados mínimos: <strong>etapa, bloque, casa</strong>. También se aceptan stage/block/house, cuota/monthly_fee, responsable, activa y fechas YYYY-MM-DD. Si cualquier fila falla, no se importa ninguna.</p>
+        <button className="primary-button" type="submit">Validar e importar</button>
+      </form>
+
+      <div className="section-head"><div><p className="eyebrow">Nueva vivienda</p><h2>Agregar una vivienda</h2></div><p>La identidad E/B/C queda fija para proteger el historial.</p></div>
       <form className="home-form" method="post" action="/api/admin/homes">
         <label>Etapa<input name="stage" inputMode="numeric" min="1" type="number" required /></label>
         <label>Bloque<input name="block" inputMode="numeric" min="1" type="number" required /></label>
