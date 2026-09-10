@@ -1,5 +1,6 @@
 import { env } from '@/src/config/env';
 import type { PaymentRecord } from '@/src/domain/types';
+import { hasPeriodConflict } from '@/src/services/period-assignment';
 
 const NON_VERIFIABLE_REVIEW_REASONS = new Set([
   'amount_below_expected',
@@ -52,6 +53,13 @@ export function buildManualVerificationUpdate(
   }
   if (hasVerifiedServicePeriodConflict(payment, existingPayments)) {
     throw new Error('service_period_already_verified');
+  }
+  // A reviewed payment can carry a different visible review reason while also colliding
+  // with another receipt for the same home/month. Do not let that masked conflict pass
+  // the explicit "verified after review" path. A clean pending payment may still be
+  // verified first; once it is verified, all competitors are blocked by the check above.
+  if (includeReview && hasPeriodConflict(payment, existingPayments)) {
+    throw new Error('service_period_conflict_under_review');
   }
 
   const at = now.toISOString();
