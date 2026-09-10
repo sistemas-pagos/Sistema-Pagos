@@ -86,6 +86,27 @@ describe('manual verification', () => {
       .toThrow('service_period_already_verified');
   });
 
+  it('blocks a reviewed payment when another receipt for the same home/month masks the period conflict', () => {
+    const reviewed: PaymentRecord = {
+      ...payment,
+      id: 'pay-reviewed',
+      sourceMessageId: 'msg-reviewed',
+      fileHash: 'hash-reviewed',
+      status: 'EN_REVISION',
+      reviewReason: 'bank_reference_reused',
+    };
+    const original: PaymentRecord = {
+      ...payment,
+      id: 'pay-original',
+      sourceMessageId: 'msg-original',
+      fileHash: 'hash-original',
+      reference: 'DEMO-REF-002',
+    };
+    expect(canManuallyVerify(reviewed, true)).toBe(true);
+    expect(() => buildManualVerificationUpdate(reviewed, [reviewed, original], new Date('2026-09-09T20:30:00.000Z'), true))
+      .toThrow('service_period_conflict_under_review');
+  });
+
   it('allows verification when the other verified payment belongs to another service month', () => {
     const otherMonth: PaymentRecord = {
       ...payment,
