@@ -1,4 +1,6 @@
+import { env } from '@/src/config/env';
 import type { PaymentRecord } from '@/src/domain/types';
+import { hasPeriodConflict } from '@/src/services/period-assignment';
 import type { PaymentStore } from '@/src/storage/types';
 
 export interface BankMovement {
@@ -18,6 +20,12 @@ export interface ReconciliationSummary {
 
 function normalized(value: string): string {
   return value.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function amountReviewReason(payment: PaymentRecord): string | undefined {
+  const difference = payment.amount - env().EXPECTED_PAYMENT_AMOUNT;
+  if (Math.abs(difference) <= 0.005) return undefined;
+  return difference < 0 ? 'amount_below_expected' : 'amount_above_expected';
 }
 
 interface Candidate {
@@ -43,6 +51,17 @@ export async function reconcilePendingPayments(
   });
 
   const candidates: Candidate[] = payments.map((payment) => {
+    // Reconciliation is a verification boundary, so it re-validates invariants rather
+    // than trusting the persisted status/reviewReason. This also protects against manual
+    // Sheet edits or a different review reason masking a simultaneous exception.
+    if (payment.stage == null || payment.block == null || payment.house == null) {
+      return { payment, outcome: 'review', reason: 'home_missing_for_reconciliation' };
+    }
+    const amountReason = amountReviewReason(payment);
+    if (amountReason) return { payment, outcome: 'review', reason: amountReason };
+    if (hasPeriodConflict(payment, allPayments)) {
+      return { payment, outcome: 'review', reason: 'service_period_already_has_payment' };
+    }
     if (!payment.reference) return { payment, outcome: 'review', reason: 'reference_missing_for_reconciliation' };
 
     const matches = movements
