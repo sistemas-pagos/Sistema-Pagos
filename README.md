@@ -90,7 +90,7 @@ EXTRAIDO
 ## Estructura
 
 ```text
-pagos-whatsapp-residencial/
+.
 ├── app/                    # UI, panel y Route Handlers de Next.js
 ├── src/
 │   ├── auth/               # sesión administrativa
@@ -106,6 +106,7 @@ pagos-whatsapp-residencial/
 │   └── whatsapp/           # payload y cliente Cloud API
 ├── tests/
 ├── docs/
+├── .github/workflows/  # CI: lint, typecheck, tests, build
 ├── AGENTS.md
 └── .env.example
 ```
@@ -272,6 +273,10 @@ Todos los datos de prueba son sintéticos.
 - [Esquema de Google Sheets](docs/SHEETS_SCHEMA.md)
 - [Seguridad y privacidad](docs/SECURITY.md)
 - [Decisión de OCR](docs/OCR_DECISION.md)
+
+## Origen del repositorio
+
+Este proyecto vivía en el monorepo [`Jchernand3z19/Portafolio`](https://github.com/Jchernand3z19/Portafolio) bajo `pagos-whatsapp-residencial/`. Se extrajo a este repositorio con su historial de commits intacto para trabajarlo de forma aislada.
 
 ## Portafolio
 

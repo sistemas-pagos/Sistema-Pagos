@@ -2,18 +2,12 @@
 
 ## Identity
 
-- Project ID: `pagos`
-- Project root: `pagos-whatsapp-residencial/`
-- PR title prefix: `[PAGOS]`
-- Future branch prefix: `pagos/`
-- Project label: `project:pagos`
-- Owned workflow: `.github/workflows/pagos-whatsapp-residencial-ci.yml`
+- Repository: `Jchernand3z19/Sistema-Pagos` (standalone).
+- PR title prefix: `[PAGOS]`.
+- Branch prefix: `pagos/`.
+- CI workflow: `.github/workflows/ci.yml`.
 
-## Scope boundary
-
-Work for PAGOS stays inside `pagos-whatsapp-residencial/**` plus the PAGOS-owned workflow unless an explicit monorepo/shared-integration change is required by `.github/project-scopes.yml`.
-
-Do not modify, merge, close, comment on, or use another project's PR/workflow as a PAGOS checkpoint. Shared portfolio files are integration surfaces, not general project ownership.
+This project was extracted from the `Jchernand3z19/Portafolio` monorepo with its history intact. Monorepo scope rules, `project-scopes.yml` and sibling-project boundaries no longer apply: every path in this repository belongs to PAGOS.
 
 ## Product invariants
 
@@ -36,8 +30,8 @@ Do not modify, merge, close, comment on, or use another project's PR/workflow as
 - Production Google Sheets remains private and server-side; Google Drive is not required while receipt retention is disabled.
 - WhatsApp webhook signature validation and file type/size/magic-byte validation must remain fail-closed.
 - Never put Meta/Google/BAC credentials in Git, docs, fixtures, logs, screenshots, or public demo output.
-- Preserve production/preview separation and the monorepo secret ownership defined in `.github/project-scopes.yml`.
+- Preserve production/preview separation. Repository secrets belong to this project only: `WHATSAPP_*`, `META_*`, `PAGOS_*`, `GOOGLE_SHEETS_*`.
 
 ## Validation
 
-For PAGOS changes, run the project checks from `pagos-whatsapp-residencial/`: lint, TypeScript typecheck, unit tests, and production build. Keep the project CI path-scoped and isolated from RPI/MUNDIAL workflows.
+Run the project checks from the repository root before pushing: `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. CI runs the same four steps on every pull request and on `main`.
