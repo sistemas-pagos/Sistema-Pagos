@@ -2,7 +2,7 @@
 
 ## Identity
 
-- Repository: `Jchernand3z19/Sistema-Pagos` (standalone).
+- Repository: `sistemas-pagos/Sistema-Pagos` (standalone).
 - PR title prefix: `[PAGOS]`.
 - Branch prefix: `pagos/`.
 - CI workflow: `.github/workflows/ci.yml`.

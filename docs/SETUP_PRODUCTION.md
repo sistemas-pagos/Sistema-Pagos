@@ -72,7 +72,7 @@ El número que envía el comprobante se utiliza para responder y para correlacio
 
 Crear un proyecto con:
 
-- repositorio: `Jchernand3z19/Sistema-Pagos`;
+- repositorio: `sistemas-pagos/Sistema-Pagos`;
 - Root Directory: la raíz del repositorio;
 - framework: Next.js;
 - Node.js 22.
