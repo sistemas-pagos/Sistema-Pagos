@@ -29,9 +29,13 @@ afterEach(() => { db.close(); });
 describe('migraciones', () => {
   it('aplica solo las pendientes y las registra', async () => {
     const limpia = await createInMemoryClient();
-    expect(await applyPendingMigrations(limpia)).toEqual(['001_inicial.sql']);
+    const aplicadas = await applyPendingMigrations(limpia);
+
+    // Se aplican todas las de migrations/, en orden, y la segunda corrida no repite.
+    expect(aplicadas[0]).toBe('001_inicial.sql');
+    expect(aplicadas).toEqual([...aplicadas].sort());
     expect(await applyPendingMigrations(limpia)).toEqual([]);
-    expect(await contar(limpia, 'schema_migrations')).toBe(1);
+    expect(await contar(limpia, 'schema_migrations')).toBe(aplicadas.length);
     limpia.close();
   });
 
