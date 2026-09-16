@@ -1,20 +1,45 @@
 import { isPeriod, periodFromDate, shiftPeriod } from '@/src/domain/periods';
 import type { HomeRef, PaymentRecord } from '@/src/domain/types';
 
-export const HISTORY_BASE_PERIOD = '2026-08';
-export const HISTORY_BASE_CUTOFF_DATE = '2026-08-15';
+/**
+ * Primer mes de servicio del sistema (docs/PLAN.md, seccion 1).
+ *
+ * La deuda anterior a septiembre de 2026 no se carga como meses: entra una sola
+ * vez como `ajustes` de tipo SALDO_INICIAL. Por eso ningun pago se asigna a un
+ * mes previo a este, y por eso ya no existe la regla especial de agosto.
+ */
+export const BASE_PERIOD = '2026-09';
 
-const NON_CONFLICTING_STATUSES = new Set<PaymentRecord['status']>(['DUPLICADO', 'RECHAZADO']);
+/**
+ * Invariante 5: estos estados liberan el mes. Todo lo demas lo mantiene
+ * ocupado, incluido un pago apenas recibido y sin verificar — de lo contrario
+ * dos comprobantes seguidos del mismo vecino chocan en el mismo mes.
+ *
+ * Un DUPLICADO tampoco reserva: no es un segundo pago, es el mismo dos veces.
+ */
+const LIBERAN_EL_MES = new Set<PaymentRecord['status']>(['NO_ENCONTRADO', 'RECHAZADO', 'DUPLICADO']);
+
+export interface HomeForPeriod extends HomeRef {
+  /** Fecha de alta. A una vivienda no se le cobran meses anteriores a ella. */
+  startDate?: string;
+}
 
 function transactionPeriod(transactionDate: string | undefined, now: Date): string {
   const candidate = transactionDate?.slice(0, 7);
   return candidate && isPeriod(candidate) ? candidate : periodFromDate(now);
 }
 
-export function baselinePeriodFromDepositDate(transactionDate: string | undefined, now = new Date()): string {
-  const depositPeriod = transactionPeriod(transactionDate, now);
-  if (depositPeriod === HISTORY_BASE_PERIOD && transactionDate && transactionDate < HISTORY_BASE_CUTOFF_DATE) return '2026-07';
-  return depositPeriod;
+/** El mes del deposito, sin bajar nunca del primer mes de servicio. */
+export function depositServicePeriod(transactionDate: string | undefined, now = new Date()): string {
+  const period = transactionPeriod(transactionDate, now);
+  return period < BASE_PERIOD ? BASE_PERIOD : period;
+}
+
+/** Desde que mes se le cobra a esta vivienda. */
+function firstBillablePeriod(home: HomeForPeriod): string {
+  const candidate = home.startDate?.slice(0, 7);
+  const alta = candidate && isPeriod(candidate) ? candidate : BASE_PERIOD;
+  return alta < BASE_PERIOD ? BASE_PERIOD : alta;
 }
 
 function sameHome(payment: PaymentRecord, home: HomeRef): boolean {
@@ -33,46 +58,43 @@ function periodsBetween(start: string, end: string): string[] {
 }
 
 /**
- * Business rule:
- * - August 2026 is the baseline month for the historical ledger.
- * - Deposits dated 2026-08-01..14 are treated as July.
- * - Deposits dated 2026-08-15..31 are treated as August.
- * - From September onward, advance only through months already VERIFIED as paid.
- * - A merely received/review payment does not prove the month is paid. A new receipt is
- *   therefore assigned to the same oldest unpaid month and the conflict is sent to review.
- * - If every month through the deposit month is verified, keep an extra deposit in the
- *   deposit month so it is visible for human review instead of silently prepaying the future.
+ * A que mes de servicio corresponde un pago (docs/PLAN.md, invariante 5).
+ *
+ * Es el mes mas antiguo desde la fecha de alta de la vivienda que no tenga ya un
+ * pago encima, sea verificado o pendiente. Nunca se asigna a meses futuros: el
+ * tope es el mes del deposito, y si todos los meses hasta ahi estan ocupados el
+ * pago se queda en ese mes y la deteccion de conflicto lo manda a revision, en
+ * vez de adelantar una cuota en silencio.
  */
 export function assignServicePeriod(
-  home: HomeRef,
+  home: HomeForPeriod,
   transactionDate: string | undefined,
   existingPayments: readonly PaymentRecord[],
   now = new Date(),
   excludePaymentId?: string,
 ): string {
-  const depositPeriod = transactionPeriod(transactionDate, now);
+  const desde = firstBillablePeriod(home);
+  const deposito = transactionPeriod(transactionDate, now);
+  // Una vivienda dada de alta despues del deposito arranca igual en su primer
+  // mes: antes de existir no debia nada.
+  const tope = deposito < desde ? desde : deposito;
 
-  if (depositPeriod < HISTORY_BASE_PERIOD) return depositPeriod;
-
-  if (depositPeriod === HISTORY_BASE_PERIOD) return baselinePeriodFromDepositDate(transactionDate, now);
-
-  const verifiedPeriods = new Set(
+  const ocupados = new Set(
     existingPayments
       .filter((payment) => payment.id !== excludePaymentId)
-      .filter((payment) => payment.status === 'VERIFICADO')
+      .filter((payment) => !LIBERAN_EL_MES.has(payment.status))
       .filter((payment) => sameHome(payment, home))
       .map((payment) => payment.period),
   );
 
-  const firstPending = periodsBetween(HISTORY_BASE_PERIOD, depositPeriod).find((period) => !verifiedPeriods.has(period));
-  return firstPending ?? depositPeriod;
+  return periodsBetween(desde, tope).find((period) => !ocupados.has(period)) ?? tope;
 }
 
 export function hasPeriodConflict(payment: PaymentRecord, existingPayments: readonly PaymentRecord[]): boolean {
   if (payment.stage == null || payment.block == null || payment.house == null) return false;
   return existingPayments.some((other) =>
     other.id !== payment.id
-    && !NON_CONFLICTING_STATUSES.has(other.status)
+    && !LIBERAN_EL_MES.has(other.status)
     && other.stage === payment.stage
     && other.block === payment.block
     && other.house === payment.house

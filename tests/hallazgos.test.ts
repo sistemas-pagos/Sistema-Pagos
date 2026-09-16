@@ -38,27 +38,40 @@ describe('hallazgos', () => {
     expect(parseHomeReference('Casa 18, Bloque 4, Etapa 1')).toEqual(esperado);
   });
 
-  it('H2: un pago NO_ENCONTRADO bloquea el mes y el pago real siguiente cae en revisión', async () => {
-    const notFound = base({ id: 'nf', status: 'NO_ENCONTRADO', reference: 'OLD1', fileHash: 'x' });
+  it('H2 corregido: un pago NO_ENCONTRADO libera el mes y el siguiente lo toma', async () => {
+    // Invariante 5: NO_ENCONTRADO, RECHAZADO y ANULADO liberan el mes.
+    const notFound = base({ id: 'nf', status: 'NO_ENCONTRADO', period: '2026-09', reference: 'OLD1', fileHash: 'x' });
     const now = () => new Date('2026-09-20T12:00:00Z');
     const store = new MemoryPaymentStore({ homes, payments: [notFound] }, now);
+
     const r = await processReceiptMessage({ messageId: 'a', phone: '+504', bytes: png(1), declaredMime: 'image/png', syntheticOcrText: receipt('20/09/2026', 'NEWREF0001') }, { store, now });
-    expect(r.status).toBe('EN_REVISION');
-    expect(r.reason).toBe('service_period_already_has_payment');
+    expect(r.status).toBe('PENDIENTE_VERIFICACION');
+
+    const pago = (await store.listPayments()).find((item) => item.id !== 'nf');
+    expect(pago?.period).toBe('2026-09');
   });
 
-  it('H3: dos cuotas mensuales seguidas sin verificar chocan (la segunda va a revisión)', async () => {
+  it('H3 corregido: dos cuotas seguidas sin verificar caen en meses distintos', async () => {
+    // Un pago pendiente reserva su mes, así que el segundo avanza en vez de chocar.
     const now = () => new Date('2026-10-02T12:00:00Z');
     const store = new MemoryPaymentStore({ homes }, now);
+
     const first = await processReceiptMessage({ messageId: 'a', phone: '+504', bytes: png(1), declaredMime: 'image/png', syntheticOcrText: receipt('01/09/2026', 'REFSEP0001') }, { store, now });
     const second = await processReceiptMessage({ messageId: 'b', phone: '+504', bytes: png(2), declaredMime: 'image/png', syntheticOcrText: receipt('01/10/2026', 'REFOCT0001') }, { store, now });
+
     expect(first.status).toBe('PENDIENTE_VERIFICACION');
-    expect(second.status).toBe('EN_REVISION');
+    expect(second.status).toBe('PENDIENTE_VERIFICACION');
+
+    const pagos = await store.listPayments();
+    expect(pagos.map((pago) => pago.period).sort()).toEqual(['2026-09', '2026-10']);
   });
 
-  it('H4: la asignación de mes ignora la fecha de alta de la vivienda', () => {
-    // Casa dada de alta en noviembre: su primer pago igual se manda a agosto.
-    expect(assignServicePeriod({ stage: 1, block: 4, house: 18 }, '2026-11-05', [])).toBe('2026-08');
+  it('H4 corregido: la asignación de mes respeta la fecha de alta de la vivienda', () => {
+    // Casa dada de alta en noviembre: no debe septiembre ni octubre.
+    const alta = { stage: 1, block: 4, house: 18, startDate: '2026-11-05' };
+    expect(assignServicePeriod(alta, '2026-11-05', [])).toBe('2026-11');
+    // Sin fecha de alta, arranca en el primer mes de servicio del sistema.
+    expect(assignServicePeriod({ stage: 1, block: 4, house: 18 }, '2026-11-05', [])).toBe('2026-09');
   });
 
   it('H5 corregido: en producción, sin beneficiario configurado nada pasa como pago normal', async () => {
