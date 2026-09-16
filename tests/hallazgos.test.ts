@@ -20,12 +20,22 @@ const receipt = (date: string, ref: string, extra = '') => SYNTHETIC_BAC_RECEIPT
   .replace('07/09/2026', date).replace('DEMOREF000001', ref) + extra;
 
 beforeEach(() => { process.env.APP_MODE = 'demo'; delete process.env.EXPECTED_BENEFICIARY; resetEnvForTests(); });
-afterEach(() => { delete process.env.APP_MODE; resetEnvForTests(); });
+afterEach(() => {
+  delete process.env.APP_MODE;
+  delete process.env.EXPECTED_BENEFICIARY;
+  delete process.env.EXPECTED_ACCOUNT_LAST4;
+  resetEnvForTests();
+});
 
 describe('hallazgos', () => {
-  it('H1: el formato compacto E1B4C18 no se reconoce', () => {
-    expect(parseHomeReference('E1 B4 C18')).toBeDefined();
-    expect(parseHomeReference('E1B4C18')).toBeUndefined();
+  it('H1 corregido: el formato compacto E1B4C18 se reconoce', () => {
+    const esperado = { stage: 1, block: 4, house: 18 };
+    expect(parseHomeReference('E1 B4 C18')).toEqual(esperado);
+    expect(parseHomeReference('E1B4C18')).toEqual(esperado);
+    expect(parseHomeReference('e1b4c18')).toEqual(esperado);
+    expect(parseHomeReference('Etapa1Bloque4Casa18')).toEqual(esperado);
+    // El orden distinto se sigue admitiendo.
+    expect(parseHomeReference('Casa 18, Bloque 4, Etapa 1')).toEqual(esperado);
   });
 
   it('H2: un pago NO_ENCONTRADO bloquea el mes y el pago real siguiente cae en revisión', async () => {
@@ -51,27 +61,59 @@ describe('hallazgos', () => {
     expect(assignServicePeriod({ stage: 1, block: 4, house: 18 }, '2026-11-05', [])).toBe('2026-08');
   });
 
-  it('H5: sin EXPECTED_BENEFICIARY, un depósito a otra cuenta queda como pago normal', async () => {
+  it('H5 corregido: en producción, sin beneficiario configurado nada pasa como pago normal', async () => {
+    // Invariante 4: beneficiario y cuenta destino son obligatorios en producción.
+    process.env.APP_MODE = 'production';
+    resetEnvForTests();
     const now = () => new Date('2026-09-08T12:00:00Z');
     const store = new MemoryPaymentStore({ homes }, now);
     const other = receipt('07/09/2026', 'REFOTRA001').replace('RESIDENCIAL DEMO', 'OTRA PERSONA').replace('000000000001', '999999999999');
+
     const r = await processReceiptMessage({ messageId: 'a', phone: '+504', bytes: png(1), declaredMime: 'image/png', syntheticOcrText: other }, { store, now });
-    expect(r.status).toBe('PENDIENTE_VERIFICACION');
+    expect(r.status).toBe('EN_REVISION');
   });
 
-  it('H6: coincidencia parcial del beneficiario deja pasar nombres truncados por OCR', async () => {
+  it('H5 corregido: un depósito a otra cuenta no se verifica', async () => {
+    process.env.APP_MODE = 'production';
+    process.env.EXPECTED_BENEFICIARY = 'RESIDENCIAL DEMO';
+    process.env.EXPECTED_ACCOUNT_LAST4 = '0001';
+    resetEnvForTests();
+    const now = () => new Date('2026-09-08T12:00:00Z');
+    const store = new MemoryPaymentStore({ homes }, now);
+    const other = receipt('07/09/2026', 'REFOTRA003').replace('RESIDENCIAL DEMO', 'OTRA PERSONA').replace('000000000001', '999999999999');
+
+    const r = await processReceiptMessage({ messageId: 'a', phone: '+504', bytes: png(1), declaredMime: 'image/png', syntheticOcrText: other }, { store, now });
+    expect(r.status).toBe('EN_REVISION');
+    expect(r.reason).toBe('beneficiary_unexpected');
+  });
+
+  it('H6 corregido: la comparación del beneficiario es exacta', async () => {
+    // 'DEMO' ya no pasa como si fuera 'RESIDENCIAL DEMO'.
     process.env.EXPECTED_BENEFICIARY = 'RESIDENCIAL DEMO';
     resetEnvForTests();
     const now = () => new Date('2026-09-08T12:00:00Z');
     const store = new MemoryPaymentStore({ homes }, now);
     const other = receipt('07/09/2026', 'REFOTRA002').replace('RESIDENCIAL DEMO', 'DEMO');
+
     const r = await processReceiptMessage({ messageId: 'a', phone: '+504', bytes: png(1), declaredMime: 'image/png', syntheticOcrText: other }, { store, now });
+    expect(r.status).toBe('EN_REVISION');
+    expect(r.reason).toBe('beneficiary_unexpected');
+  });
+
+  it('H6 corregido: el nombre exacto sí pasa', async () => {
+    process.env.EXPECTED_BENEFICIARY = 'RESIDENCIAL DEMO';
+    resetEnvForTests();
+    const now = () => new Date('2026-09-08T12:00:00Z');
+    const store = new MemoryPaymentStore({ homes }, now);
+
+    const r = await processReceiptMessage({ messageId: 'a', phone: '+504', bytes: png(1), declaredMime: 'image/png', syntheticOcrText: receipt('07/09/2026', 'REFOK000001') }, { store, now });
     expect(r.status).toBe('PENDIENTE_VERIFICACION');
   });
 
-  it('H7: una línea "Transacción exitosa" se toma como referencia bancaria', () => {
+  it('H7 corregido: "Transacción exitosa" ya no se toma como referencia', () => {
     const text = SYNTHETIC_BAC_RECEIPTS.valid.replace('Transferencia realizada', 'Transacción exitosa');
-    expect(bacParser.parse(text).reference).toBe('EXITOSA');
+    // Se queda con la etiqueta 'Referencia', que es la real.
+    expect(bacParser.parse(text).reference).toBe('DEMOREF000001');
   });
 
   it('H8: un registro DUPLICADO reasignado a otra casa por el panel queda verificable', () => {
