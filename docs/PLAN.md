@@ -13,6 +13,9 @@ Este documento reemplaza las decisiones anteriores cuando haya conflicto. Implem
 - **Sin Apps Script.**
 - La verificación de transferencias se hace enviando el **CSV del banco por WhatsApp** desde un número autorizado.
 - Cada pago verificado recibe un **número de recibo único** y se notifica al vecino por WhatsApp.
+- **Mes de ajuste de base: septiembre 2026.** Es el primer mes de servicio del sistema; quien no pague septiembre queda moroso. La deuda anterior a septiembre no se carga como meses ni como pagos: entra una sola vez como `ajustes` de tipo `SALDO_INICIAL` (fase 3).
+- **Prórroga del mes de ajuste de base:** hasta el 14 del mes siguiente (14 de octubre de 2026). Es única y no se repite en los meses siguientes.
+- Las prórrogas se guardan **como dato por período**, nunca como una excepción escrita en el código. Una excepción de calendario incrustada en el código es justamente lo que la fase 3 viene a eliminar (la regla especial de agosto).
 
 ## 2. Arquitectura
 
@@ -286,7 +289,8 @@ Reglas para todos: `permissions: contents: read` salvo lo necesario, `concurrenc
 
 ## 7. Pendiente de definir (no inventar; preguntar)
 
-- Fecha límite de pago y fecha de salida de la lista de cobro.
+- Fecha límite de pago: falta decidir si es el **día 30 literal** (en febrero, el 28) o el **último día del mes**. Lo segundo evita el caso de febrero y el de los meses de 31 días. El mes de ajuste de base ya tiene su prórroga definida en la sección 1.
+- Fecha de salida de la lista de cobro.
 - Tesorero y frecuencia del cierre de caja.
 - Tratamiento de montos que no son múltiplos de la cuota.
 - Casas vacías o exoneradas.
