@@ -2,7 +2,62 @@
 
 Este documento describe lo que debe existir fuera de GitHub. No contiene valores reales.
 
-## 1. Google Cloud
+## 1. Turso (base de datos)
+
+Turso es la única fuente de verdad del sistema (`docs/PLAN.md`, sección 1). La base es
+nueva y exclusiva de este proyecto: no se comparte con ningún otro.
+
+### 1.1 Crear la base
+
+En [turso.tech](https://turso.tech), con la cuenta de la empresa:
+
+1. **Create Database**, nombre `sistema-pagos`, región la más cercana a Honduras.
+2. Copiar la **Database URL** (empieza con `libsql://`).
+3. **Create Token** con `Expires: Never` y `Authorization Level: Read & Write`.
+   Read & Write es obligatorio: las migraciones crean tablas y el sistema escribe pagos.
+   El token se muestra una sola vez; si se pierde, se revoca y se crea otro.
+
+Equivalente por terminal:
+
+```bash
+turso db create sistema-pagos
+turso db show sistema-pagos --url      # PAGOS_TURSO_URL
+turso db tokens create sistema-pagos   # PAGOS_TURSO_TOKEN
+```
+
+### 1.2 Guardar las credenciales en GitHub
+
+En **Settings → Environments** del repositorio, crear un Environment llamado
+`pagos-produccion` (exacto; el workflow lo busca por ese nombre) con dos
+**Environment secrets**:
+
+- `PAGOS_TURSO_URL`
+- `PAGOS_TURSO_TOKEN`
+
+Activar **Required reviewers** en ese Environment. Es lo que impide que una migración
+toque la base real sin que una persona la apruebe.
+
+Estas credenciales nunca van al código, a `.env` versionado, a los logs ni a las
+fixtures. Si se filtran: revocar el token en Turso, crear otro y actualizar el secreto.
+No hay que tocar código.
+
+### 1.3 Aplicar las migraciones
+
+Las migraciones viven en `migrations/NNN_*.sql` y las aplica **solo** el workflow manual
+`migraciones`:
+
+1. Actions → **Migraciones** → **Run workflow** → rama `main`.
+2. Aprobar cuando el Environment lo pida.
+3. El log debe decir `Migraciones aplicadas: N` con los nombres de archivo. No imprime
+   filas, ni la URL de la base, ni el token.
+
+Una segunda corrida sin migraciones nuevas debe decir `Sin migraciones pendientes.`
+
+Una migración aplicada es **inmutable**: el script guarda su `sha256` en
+`schema_migrations` y rechaza la corrida si el archivo cambió. Para modificar el esquema
+se agrega un archivo nuevo, nunca se edita uno ya aplicado.
+
+## 2. Google Cloud
 
 Crear o seleccionar un proyecto bajo la cuenta de la empresa y habilitar:
 
@@ -17,7 +72,7 @@ Variables requeridas:
 
 Google Drive **no es necesario** en el MVP actual porque el cliente decidió no conservar las imágenes de los comprobantes.
 
-## 2. Google Sheets
+## 3. Google Sheets
 
 Crear una hoja privada y compartirla únicamente con la cuenta de servicio con permisos de edición.
 
@@ -31,7 +86,7 @@ La base `Viviendas` debe usar **Etapa + Bloque + Casa** como identidad. No guard
 
 La pestaña `Pagos` tampoco guarda `media_id`, `receipt_file_id` ni una URL del comprobante. Sólo se conserva el hash SHA-256 y los datos estructurados extraídos.
 
-## 3. Retención de comprobantes
+## 4. Retención de comprobantes
 
 Las imágenes recibidas por WhatsApp se usan únicamente durante la solicitud:
 
@@ -46,7 +101,7 @@ No crear carpeta de Drive, Blob, S3 u otro archivo histórico mientras el client
 
 Si posteriormente el cliente autoriza retención, debe diseñarse como una función separada con política de acceso y retención explícita; no debe activarse silenciosamente.
 
-## 4. Meta / WhatsApp Cloud API
+## 5. Meta / WhatsApp Cloud API
 
 Configurar una aplicación de Meta y un número autorizado para WhatsApp Cloud API.
 
@@ -68,7 +123,7 @@ Suscribir únicamente los eventos necesarios.
 
 El número que envía el comprobante se utiliza para responder y para correlacionar temporalmente una respuesta pendiente. **Nunca se usa para inferir Etapa/Bloque/Casa.**
 
-## 5. Vercel
+## 6. Vercel
 
 Crear un proyecto con:
 
@@ -95,7 +150,7 @@ Variables opcionales de validación:
 
 Configurar `APP_MODE=production` únicamente en producción. Mantener previews públicas en `demo` cuando no necesiten datos reales.
 
-## 6. Viviendas
+## 7. Viviendas
 
 Cargar `Viviendas` con datos reales sólo en la Sheet privada.
 
@@ -112,7 +167,7 @@ Campos mínimos:
 
 Para el MVP la cuota bancaria esperada es L150.00. El sistema conserva por separado la cuota de la vivienda y el monto extraído del comprobante; cualquier monto distinto de L150 queda en revisión humana.
 
-## 7. Histórico inicial
+## 8. Histórico inicial
 
 Agosto 2026 es la base del histórico de depósitos:
 
@@ -125,7 +180,7 @@ Agosto 2026 es la base del histórico de depósitos:
 
 Antes de cargar datos reales, validar el histórico en una copia privada/controlada de la Sheet.
 
-## 8. Verificación bancaria
+## 9. Verificación bancaria
 
 El MVP **no necesita acceso a la banca en línea**.
 
@@ -141,7 +196,7 @@ No almacenar usuario, contraseña, PIN, token OTP ni códigos de BAC en Vercel, 
 
 Una integración futura puede usar un archivo/API bancaria autorizada. Para verificación automática la fuente debe proporcionar un identificador estable del movimiento. El sistema persiste `bank_movement_id` y no permite que ese movimiento verifique dos pagos distintos, ni en la misma corrida ni en una posterior.
 
-## 9. Validación antes de operar
+## 10. Validación antes de operar
 
 - webhook challenge funciona;
 - firma inválida retorna 401;
