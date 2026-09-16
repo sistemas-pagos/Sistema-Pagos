@@ -1,20 +1,32 @@
 import { z } from 'zod';
 
+/**
+ * Una variable declarada pero vacia es una variable sin configurar.
+ *
+ * Los paneles de despliegue (Vercel, entre otros) crean la variable con valor
+ * vacio cuando uno la deja en blanco, y sin esto una cadena vacia llega al
+ * esquema: `z.coerce.number()` la convierte en 0 y el arranque falla con un
+ * mensaje que no explica nada. `.default()` no alcanza, porque solo cubre el
+ * caso `undefined`.
+ */
+const enBlancoEsAusente = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 const optionalString = z.preprocess(
-  (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+  enBlancoEsAusente,
   z.string().trim().min(1).optional(),
 );
 const optionalLast4 = z.preprocess(
-  (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+  enBlancoEsAusente,
   z.string().trim().regex(/^\d{4}$/).optional(),
 );
 
 const envSchema = z.object({
-  APP_MODE: z.enum(['demo', 'production']).default('demo'),
+  APP_MODE: z.preprocess(enBlancoEsAusente, z.enum(['demo', 'production']).default('demo')),
   APP_BASE_URL: optionalString,
-  MAX_RECEIPT_BYTES: z.coerce.number().int().positive().max(20 * 1024 * 1024).default(8 * 1024 * 1024),
-  PENDING_CONTEXT_MINUTES: z.coerce.number().int().positive().max(24 * 60).default(30),
-  EXPECTED_PAYMENT_AMOUNT: z.coerce.number().positive().default(150),
+  MAX_RECEIPT_BYTES: z.preprocess(enBlancoEsAusente, z.coerce.number().int().positive().max(20 * 1024 * 1024).default(8 * 1024 * 1024)),
+  PENDING_CONTEXT_MINUTES: z.preprocess(enBlancoEsAusente, z.coerce.number().int().positive().max(24 * 60).default(30)),
+  EXPECTED_PAYMENT_AMOUNT: z.preprocess(enBlancoEsAusente, z.coerce.number().positive().default(150)),
   ADMIN_ACCESS_KEY: optionalString,
   AUTH_SESSION_SECRET: optionalString,
   GOOGLE_SHEET_ID: optionalString,
@@ -25,7 +37,7 @@ const envSchema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: optionalString,
   META_APP_SECRET: optionalString,
   WHATSAPP_GRAPH_VERSION: z.preprocess(
-    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    enBlancoEsAusente,
     z.string().trim().regex(/^v\d+\.\d+$/).default('v26.0'),
   ),
   EXPECTED_BENEFICIARY: optionalString,
