@@ -41,11 +41,28 @@ function parseMoney(value: string | undefined): number | undefined {
   return Number.isFinite(amount) && amount > 0 ? amount : undefined;
 }
 
-function parseDate(value: string | undefined, text: string): string | undefined {
-  const match = (value ?? text).match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\b/);
+const MESES: Record<string, string> = {
+  ENE: '01', FEB: '02', MAR: '03', ABR: '04', MAY: '05', JUN: '06',
+  JUL: '07', AGO: '08', SEP: '09', SET: '09', OCT: '10', NOV: '11', DIC: '12',
+};
+
+/** '07 de septiembre de 2026', '7 sep 2026', '7-SEP-2026'. */
+function parseTextualDate(value: string): string | undefined {
+  const match = stripDiacritics(value).toUpperCase()
+    .match(/\b(\d{1,2})\s*(?:DE\s+)?[-\/ ]?\s*([A-Z]{3,10})\.?\s*(?:DE\s+)?[-\/ ]?\s*(\d{4})\b/);
   if (!match) return undefined;
-  const year = match[3].length === 2 ? `20${match[3]}` : match[3];
-  return `${year}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+  const month = MESES[match[2].slice(0, 3)];
+  return month ? `${match[3]}-${month}-${match[1].padStart(2, '0')}` : undefined;
+}
+
+function parseDate(value: string | undefined, text: string): string | undefined {
+  const source = value ?? text;
+  const numeric = source.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\b/);
+  if (numeric) {
+    const year = numeric[3].length === 2 ? `20${numeric[3]}` : numeric[3];
+    return `${year}-${numeric[2].padStart(2, '0')}-${numeric[1].padStart(2, '0')}`;
+  }
+  return parseTextualDate(source);
 }
 
 function parseTime(value: string | undefined, text: string): string | undefined {
@@ -68,13 +85,6 @@ function maskAccount(value: string | undefined): string | undefined {
   return digits.length >= 4 ? `••••${digits.slice(-4)}` : undefined;
 }
 
-function fallbackAmount(text: string): number | undefined {
-  const values = Array.from(text.matchAll(/(?:HNL|LPS?\.?|L)\s*([\d.,]+)/gi))
-    .map((match) => parseMoney(match[0]))
-    .filter((value): value is number => value != null);
-  return values.length ? Math.max(...values) : undefined;
-}
-
 export const bacParser: ReceiptParser = {
   id: 'bac-honduras',
   detect(text: string): number {
@@ -87,12 +97,19 @@ export const bacParser: ReceiptParser = {
   },
   parse(text: string): ReceiptExtraction {
     const lines = linesOf(text);
-    const amount = parseMoney(findLabel(lines, ['Monto', 'Monto transferido', 'Total', 'Importe'])) ?? fallbackAmount(text);
+    // Sin respaldo al mayor monto del texto: un comprobante que no dice su monto
+    // en una etiqueta clara va a revision, no se adivina.
+    const amount = parseMoney(findLabel(lines, ['Monto', 'Monto transferido', 'Total', 'Importe']));
     const detail = findLabel(lines, ['Detalle', 'Descripción', 'Descripcion', 'Concepto', 'Motivo']);
-    const home = parseHomeReference(detail) ?? parseHomeReference(text);
-    const reference = normalizeReference(findLabel(lines, ['Referencia', 'No. de transacción', 'No de transaccion', 'Transacción', 'Transaccion', 'Número de confirmación', 'Numero de confirmacion']));
-    const depositor = findLabel(lines, ['Depositante', 'Remitente', 'Ordenante', 'De', 'Nombre del ordenante']);
-    const beneficiary = findLabel(lines, ['Beneficiario', 'A nombre de', 'Destino', 'Nombre beneficiario']);
+    // Solo del detalle. Buscarlo en todo el texto agarra numeros de cuenta y
+    // referencias que casualmente parecen una vivienda.
+    const home = parseHomeReference(detail);
+    // 'Transaccion' a secas capturaba lineas como 'Transaccion exitosa' y las
+    // guardaba como referencia bancaria.
+    const reference = normalizeReference(findLabel(lines, ['Referencia', 'No. de transacción', 'No de transaccion', 'Número de transacción', 'Numero de transaccion', 'Número de confirmación', 'Numero de confirmacion']));
+    // 'De' y 'Destino' eran demasiado genericas para ser etiquetas.
+    const depositor = findLabel(lines, ['Depositante', 'Remitente', 'Ordenante', 'Nombre del ordenante']);
+    const beneficiary = findLabel(lines, ['Beneficiario', 'A nombre de', 'Nombre beneficiario', 'Nombre del beneficiario']);
     const destinationAccount = findLabel(lines, ['Cuenta destino', 'Cuenta beneficiaria', 'Cuenta de destino']);
     const warnings: string[] = [];
     if (!amount) warnings.push('amount_missing');
