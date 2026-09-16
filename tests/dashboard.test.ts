@@ -30,7 +30,7 @@ describe('dashboard snapshot', () => {
     const external: PaymentRecord = {
       id: 'pay-external', createdAt: '2026-09-08T13:00:00.000Z', updatedAt: '2026-09-08T13:00:00.000Z',
       sourceMessageId: 'msg-external', phone: '50400000999', bank: 'BAC Honduras', amount: 150,
-      reference: 'DEMOREF-EXTERNAL', stage: 9, block: 99, house: 99, period: DEMO_PERIOD, status: 'VERIFICADO', fileHash: 'hash-external',
+      reference: 'DEMOREF-EXTERNAL', stage: '9', block: '99', house: '99', period: DEMO_PERIOD, status: 'VERIFICADO', fileHash: 'hash-external',
     };
     const store = new MemoryPaymentStore({ homes: DEMO_HOMES, payments: [...DEMO_PAYMENTS, external] });
     const snapshot = await buildDashboardSnapshot(store, DEMO_PERIOD);
@@ -44,12 +44,12 @@ describe('dashboard snapshot', () => {
 
   it('keeps identical block and house numbers separate across stages', async () => {
     const homes: HomeRecord[] = [
-      { id: 'e1', stage: 1, block: 4, house: 18, monthlyFee: 150, active: true },
-      { id: 'e2', stage: 2, block: 4, house: 18, monthlyFee: 150, active: true },
+      { id: 'e1', stage: '1', block: '4', house: '18', monthlyFee: 150, active: true },
+      { id: 'e2', stage: '2', block: '4', house: '18', monthlyFee: 150, active: true },
     ];
     const paid: PaymentRecord = {
       id: 'p1', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', sourceMessageId: 'm1',
-      phone: '50400000000', bank: 'BAC Honduras', amount: 150, stage: 1, block: 4, house: 18,
+      phone: '50400000000', bank: 'BAC Honduras', amount: 150, stage: '1', block: '4', house: '18',
       period: DEMO_PERIOD, status: 'VERIFICADO', fileHash: 'h1',
     };
     const snapshot = await buildDashboardSnapshot(new MemoryPaymentStore({ homes, payments: [paid] }), DEMO_PERIOD);
@@ -60,11 +60,11 @@ describe('dashboard snapshot', () => {
 
   it('classifies a received but unverified home as por verificar, not paid or pending', async () => {
     const homes: HomeRecord[] = [
-      { id: 'e1', stage: 1, block: 1, house: 1, monthlyFee: 150, active: true },
+      { id: 'e1', stage: '1', block: '1', house: '1', monthlyFee: 150, active: true },
     ];
     const received: PaymentRecord = {
       id: 'p-received', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', sourceMessageId: 'm-received',
-      phone: '50400000000', bank: 'BAC Honduras', amount: 150, stage: 1, block: 1, house: 1,
+      phone: '50400000000', bank: 'BAC Honduras', amount: 150, stage: '1', block: '1', house: '1',
       period: DEMO_PERIOD, status: 'PENDIENTE_VERIFICACION', fileHash: 'h-received',
     };
     const snapshot = await buildDashboardSnapshot(new MemoryPaymentStore({ homes, payments: [received] }), DEMO_PERIOD);
@@ -80,7 +80,7 @@ describe('dashboard snapshot', () => {
 
   it('includes a deactivated home in historical periods covered by its end date', async () => {
     const formerHome: HomeRecord = {
-      id: 'home-former', stage: 1, block: 9, house: 1, monthlyFee: 150, active: false,
+      id: 'home-former', stage: '1', block: '9', house: '1', monthlyFee: 150, active: false,
       startDate: '2026-01-01', endDate: '2026-08-20',
     };
     const store = new MemoryPaymentStore({ homes: [formerHome] });

@@ -47,7 +47,7 @@ describe('parser BAC — sin adivinar', () => {
   });
 
   it('lee la vivienda cuando sí está en el detalle', () => {
-    expect(bacParser.parse(valido).home).toEqual({ stage: 1, block: 4, house: 18 });
+    expect(bacParser.parse(valido).home).toEqual({ stage: '1', block: '4', house: '18' });
   });
 });
 

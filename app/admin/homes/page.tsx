@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isAdminAuthenticated } from '@/src/auth/guard';
 import { getPaymentStore } from '@/src/storage';
+import { compareHomes } from '@/src/domain/housing';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export default async function HomesAdminPage({ searchParams }: { searchParams: P
   const params = await searchParams;
   const imported = Number.parseInt(params.imported ?? '', 10);
   const store = await getPaymentStore();
-  const homes = (await store.listHomes()).sort((a, b) => a.stage - b.stage || a.block - b.block || a.house - b.house);
+  const homes = (await store.listHomes()).sort(compareHomes);
   const active = homes.filter((home) => home.active);
   const expected = active.reduce((total, home) => total + home.monthlyFee, 0);
   const stages = new Set(active.map((home) => home.stage));

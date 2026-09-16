@@ -1,4 +1,4 @@
-import { isValidHome } from '@/src/domain/housing';
+import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
 import type { HomeRecord } from '@/src/domain/types';
 
 const MAX_IMPORT_ROWS = 5_000;
@@ -76,11 +76,6 @@ function parseDelimitedLine(line: string, delimiter: string): string[] {
   return values;
 }
 
-function parseInteger(value: string | undefined, label: string, line: number): number {
-  if (!value || !/^\d+$/.test(value.trim())) throw new HomeImportError(`Línea ${line}: ${label} inválido.`);
-  return Number.parseInt(value, 10);
-}
-
 function parseFee(value: string | undefined, line: number): number {
   if (!value?.trim()) return DEFAULT_MONTHLY_FEE;
   const normalized = value.replace(/\s/g, '').replace(/^L/i, '').replace(/,/g, '');
@@ -109,7 +104,7 @@ function parseDate(value: string | undefined, label: string, line: number): stri
   return text;
 }
 
-function addressKey(stage: number, block: number, house: number): string {
+function addressKey(stage: string, block: string, house: string): string {
   return `${stage}:${block}:${house}`;
 }
 
@@ -148,10 +143,11 @@ export function parseHomesImport(input: string, existingHomes: readonly HomeReco
     const row: ImportRow = {};
     headers.forEach((header, index) => { row[header] = values[index] ?? ''; });
 
-    const stage = parseInteger(row.stage, 'etapa', lineNumber);
-    const block = parseInteger(row.block, 'bloque', lineNumber);
-    const house = parseInteger(row.house, 'casa', lineNumber);
-    if (!isValidHome(stage, block, house)) throw new HomeImportError(`Línea ${lineNumber}: Etapa/Bloque/Casa fuera de rango.`);
+    // Etapa, bloque y casa son texto: el padron admite el bloque A o la casa 18B.
+    const stage = normalizeHomePart(row.stage ?? '');
+    const block = normalizeHomePart(row.block ?? '');
+    const house = normalizeHomePart(row.house ?? '');
+    if (!isValidHome(stage, block, house)) throw new HomeImportError(`Línea ${lineNumber}: Etapa/Bloque/Casa inválida.`);
 
     const startDate = parseDate(row.startDate, 'fecha_alta', lineNumber);
     const endDate = parseDate(row.endDate, 'fecha_baja', lineNumber);

@@ -4,11 +4,11 @@ import { deriveMonthlyHomeStatus } from '@/src/services/monthly-status';
 
 const PERIOD = '2026-09';
 
-function home(house: number, extra: Partial<HomeRecord> = {}): HomeRecord {
-  return { id: `home-${house}`, stage: 1, block: 1, house, monthlyFee: 150, active: true, ...extra };
+function home(house: string, extra: Partial<HomeRecord> = {}): HomeRecord {
+  return { id: `home-${house}`, stage: '1', block: '1', house, monthlyFee: 150, active: true, ...extra };
 }
 
-function payment(id: string, house: number, status: PaymentStatus, amount = 150): PaymentRecord {
+function payment(id: string, house: string, status: PaymentStatus, amount = 150): PaymentRecord {
   return {
     id,
     createdAt: `2026-09-0${house}T10:00:00.000Z`,
@@ -18,8 +18,8 @@ function payment(id: string, house: number, status: PaymentStatus, amount = 150)
     bank: 'BAC Honduras',
     transactionDate: `2026-09-0${house}`,
     amount,
-    stage: 1,
-    block: 1,
+    stage: '1',
+    block: '1',
     house,
     period: PERIOD,
     status,
@@ -29,11 +29,11 @@ function payment(id: string, house: number, status: PaymentStatus, amount = 150)
 
 describe('monthly home status', () => {
   it('derives PAGADO, POR_VERIFICAR, EN_REVISION and PENDIENTE from homes + payments', () => {
-    const homes = [home(1), home(2), home(3), home(4)];
+    const homes = [home('1'), home('2'), home('3'), home('4')];
     const payments: PaymentRecord[] = [
-      payment('verified', 1, 'VERIFICADO'),
-      payment('waiting', 2, 'PENDIENTE_VERIFICACION'),
-      { ...payment('review', 3, 'EN_REVISION', 175), reviewReason: 'amount_above_expected' },
+      payment('verified', '1', 'VERIFICADO'),
+      payment('waiting', '2', 'PENDIENTE_VERIFICACION'),
+      { ...payment('review', '3', 'EN_REVISION', 175), reviewReason: 'amount_above_expected' },
     ];
 
     const rows = deriveMonthlyHomeStatus(homes, payments, PERIOD);
@@ -46,11 +46,11 @@ describe('monthly home status', () => {
 
   it('ignores duplicate and rejected receipts when deriving monthly collection state', () => {
     const rows = deriveMonthlyHomeStatus(
-      [home(1)],
+      [home('1')],
       [
-        payment('waiting', 1, 'PENDIENTE_VERIFICACION'),
-        { ...payment('duplicate', 1, 'DUPLICADO'), duplicateOf: 'waiting', duplicateReason: 'file_hash' },
-        payment('rejected', 1, 'RECHAZADO'),
+        payment('waiting', '1', 'PENDIENTE_VERIFICACION'),
+        { ...payment('duplicate', '1', 'DUPLICADO'), duplicateOf: 'waiting', duplicateReason: 'file_hash' },
+        payment('rejected', '1', 'RECHAZADO'),
       ],
       PERIOD,
     );
@@ -62,10 +62,10 @@ describe('monthly home status', () => {
 
   it('keeps a verified obligation paid even when another receipt for the same month needs review', () => {
     const rows = deriveMonthlyHomeStatus(
-      [home(1)],
+      [home('1')],
       [
-        payment('verified', 1, 'VERIFICADO'),
-        { ...payment('extra', 1, 'EN_REVISION', 175), reviewReason: 'service_period_already_has_payment' },
+        payment('verified', '1', 'VERIFICADO'),
+        { ...payment('extra', '1', 'EN_REVISION', 175), reviewReason: 'service_period_already_has_payment' },
       ],
       PERIOD,
     );
@@ -78,8 +78,8 @@ describe('monthly home status', () => {
 
   it('only creates rows for homes that were active in the selected period', () => {
     const homes = [
-      home(1),
-      home(2, { active: false, startDate: '2026-01-01', endDate: '2026-08-20' }),
+      home('1'),
+      home('2', { active: false, startDate: '2026-01-01', endDate: '2026-08-20' }),
     ];
 
     expect(deriveMonthlyHomeStatus(homes, [], '2026-08')).toHaveLength(2);

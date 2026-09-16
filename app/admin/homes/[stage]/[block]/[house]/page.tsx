@@ -4,6 +4,7 @@ import { isAdminAuthenticated } from '@/src/auth/guard';
 import { periodLabel } from '@/src/domain/periods';
 import { getHouseHistory } from '@/src/services/house-history';
 import { getPaymentStore } from '@/src/storage';
+import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,10 +13,11 @@ const money = (value: number) => `L${value.toLocaleString('es-HN', { minimumFrac
 export default async function HousePage({ params }: { params: Promise<{ stage: string; block: string; house: string }> }) {
   if (!(await isAdminAuthenticated())) redirect('/login');
   const raw = await params;
-  const stage = Number.parseInt(raw.stage, 10);
-  const block = Number.parseInt(raw.block, 10);
-  const house = Number.parseInt(raw.house, 10);
-  if (!Number.isInteger(stage) || !Number.isInteger(block) || !Number.isInteger(house) || stage <= 0 || block <= 0 || house <= 0) notFound();
+  // La ruta trae etapa/bloque/casa como texto: admiten letras.
+  const stage = normalizeHomePart(raw.stage);
+  const block = normalizeHomePart(raw.block);
+  const house = normalizeHomePart(raw.house);
+  if (!isValidHome(stage, block, house)) notFound();
 
   const store = await getPaymentStore();
   const history = await getHouseHistory(store, stage, block, house);

@@ -9,11 +9,11 @@ import { processReceiptMessage } from '@/src/services/payment-processor';
 import { assignServicePeriod } from '@/src/services/period-assignment';
 import { MemoryPaymentStore } from '@/src/storage/memory';
 
-const homes: HomeRecord[] = [{ id: 'h', stage: 1, block: 4, house: 18, monthlyFee: 150, active: true }];
+const homes: HomeRecord[] = [{ id: 'h', stage: '1', block: '4', house: '18', monthlyFee: 150, active: true }];
 const png = (v: number) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, v]);
 const base = (over: Partial<PaymentRecord>): PaymentRecord => ({
   id: 'p', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', sourceMessageId: 'm',
-  phone: '+50400000000', bank: 'BAC Honduras', amount: 150, stage: 1, block: 4, house: 18,
+  phone: '+50400000000', bank: 'BAC Honduras', amount: 150, stage: '1', block: '4', house: '18',
   period: '2026-08', status: 'VERIFICADO', fileHash: 'h', ...over,
 });
 const receipt = (date: string, ref: string, extra = '') => SYNTHETIC_BAC_RECEIPTS.valid
@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe('hallazgos', () => {
   it('H1 corregido: el formato compacto E1B4C18 se reconoce', () => {
-    const esperado = { stage: 1, block: 4, house: 18 };
+    const esperado = { stage: '1', block: '4', house: '18' };
     expect(parseHomeReference('E1 B4 C18')).toEqual(esperado);
     expect(parseHomeReference('E1B4C18')).toEqual(esperado);
     expect(parseHomeReference('e1b4c18')).toEqual(esperado);
@@ -68,10 +68,10 @@ describe('hallazgos', () => {
 
   it('H4 corregido: la asignación de mes respeta la fecha de alta de la vivienda', () => {
     // Casa dada de alta en noviembre: no debe septiembre ni octubre.
-    const alta = { stage: 1, block: 4, house: 18, startDate: '2026-11-05' };
+    const alta = { stage: '1', block: '4', house: '18', startDate: '2026-11-05' };
     expect(assignServicePeriod(alta, '2026-11-05', [])).toBe('2026-11');
     // Sin fecha de alta, arranca en el primer mes de servicio del sistema.
-    expect(assignServicePeriod({ stage: 1, block: 4, house: 18 }, '2026-11-05', [])).toBe('2026-09');
+    expect(assignServicePeriod({ stage: '1', block: '4', house: '18' }, '2026-11-05', [])).toBe('2026-09');
   });
 
   it('H5 corregido: en producción, sin beneficiario configurado nada pasa como pago normal', async () => {
@@ -132,7 +132,7 @@ describe('hallazgos', () => {
   it('H8: un registro DUPLICADO reasignado a otra casa por el panel queda verificable', () => {
     // El endpoint assign-home no revisa el estado: pasa a PENDIENTE_VERIFICACION.
     const dup = base({ status: 'DUPLICADO', duplicateOf: 'orig' });
-    const afterAssignHome = { ...dup, house: 19, status: 'PENDIENTE_VERIFICACION' as const };
+    const afterAssignHome = { ...dup, house: '19', status: 'PENDIENTE_VERIFICACION' as const };
     expect(canManuallyVerify(afterAssignHome)).toBe(true);
   });
 

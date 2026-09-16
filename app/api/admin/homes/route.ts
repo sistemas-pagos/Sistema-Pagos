@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isAdminAuthenticated, isSameOriginRequest } from '@/src/auth/guard';
 import type { HomeRecord } from '@/src/domain/types';
 import { getPaymentStore } from '@/src/storage';
+import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
 
 export const runtime = 'nodejs';
 
@@ -18,13 +19,13 @@ export async function POST(request: Request) {
 
   try {
     const form = await request.formData();
-    const stage = Number.parseInt(String(form.get('stage') ?? ''), 10);
-    const block = Number.parseInt(String(form.get('block') ?? ''), 10);
-    const house = Number.parseInt(String(form.get('house') ?? ''), 10);
-    const monthlyFee = Number.parseFloat(String(form.get('monthlyFee') ?? ''));
-    if (!Number.isInteger(stage) || stage <= 0 || !Number.isInteger(block) || block <= 0 || !Number.isInteger(house) || house <= 0) {
+    const stage = normalizeHomePart(String(form.get('stage') ?? ''));
+    const block = normalizeHomePart(String(form.get('block') ?? ''));
+    const house = normalizeHomePart(String(form.get('house') ?? ''));
+    if (!isValidHome(stage, block, house)) {
       return new NextResponse('Invalid home', { status: 400 });
     }
+    const monthlyFee = Number.parseFloat(String(form.get('monthlyFee') ?? ''));
     if (!Number.isFinite(monthlyFee) || monthlyFee <= 0 || monthlyFee > 1_000_000) {
       return new NextResponse('Invalid monthly fee', { status: 400 });
     }

@@ -6,7 +6,7 @@ import type { PaymentRecord } from '@/src/domain/types';
 const payment: PaymentRecord = {
   id: 'pay-demo', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', sourceMessageId: 'msg-demo',
   phone: '+50400000000', bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-01', reference: 'DEMO-REF-001',
-  stage: 1, block: 4, house: 18, period: '2026-08', status: 'PENDIENTE_VERIFICACION', fileHash: 'demo-hash',
+  stage: '1', block: '4', house: '18', period: '2026-08', status: 'PENDIENTE_VERIFICACION', fileHash: 'demo-hash',
 };
 
 beforeEach(() => {

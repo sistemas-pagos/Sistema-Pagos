@@ -15,7 +15,7 @@ describe('BAC parser', () => {
     expect(result.reference).toBe('DEMOREF000001');
     expect(result.beneficiary).toBe('RESIDENCIAL DEMO');
     expect(result.destinationAccountMasked).toBe('••••0001');
-    expect(result.home).toEqual({ stage: 1, block: 4, house: 18 });
+    expect(result.home).toEqual({ stage: '1', block: '4', house: '18' });
   });
 
   it.each([

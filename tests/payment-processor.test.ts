@@ -6,8 +6,8 @@ import { processHomeReply, processReceiptMessage } from '@/src/services/payment-
 import { MemoryPaymentStore } from '@/src/storage/memory';
 
 const homes: HomeRecord[] = [
-  { id: 'home-e1-b4-c18', stage: 1, block: 4, house: 18, monthlyFee: 150, active: true },
-  { id: 'home-e1-b2-c2', stage: 1, block: 2, house: 2, monthlyFee: 150, active: true },
+  { id: 'home-e1-b4-c18', stage: '1', block: '4', house: '18', monthlyFee: 150, active: true },
+  { id: 'home-e1-b2-c2', stage: '1', block: '2', house: '2', monthlyFee: 150, active: true },
 ];
 
 function png(variant: number): Buffer {
@@ -42,9 +42,9 @@ describe('payment processor', () => {
     expect(result.action).toBe('reply');
     expect(result.status).toBe('PENDIENTE_VERIFICACION');
     const payment = (await store.listPayments())[0];
-    expect(payment.stage).toBe(1);
-    expect(payment.block).toBe(4);
-    expect(payment.house).toBe(18);
+    expect(payment.stage).toBe('1');
+    expect(payment.block).toBe('4');
+    expect(payment.house).toBe('18');
     expect(payment.period).toBe('2026-09');
     expect(payment.status).not.toBe('VERIFICADO');
   });
@@ -53,7 +53,7 @@ describe('payment processor', () => {
     const september: PaymentRecord = {
       id: 'pay-sep', createdAt: '2026-09-30T12:00:00.000Z', updatedAt: '2026-09-30T12:00:00.000Z', sourceMessageId: 'old-msg',
       phone: '+50400000111', bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-30', reference: 'OLDREF001',
-      stage: 1, block: 4, house: 18, period: '2026-09', status: 'VERIFICADO', fileHash: 'old-hash',
+      stage: '1', block: '4', house: '18', period: '2026-09', status: 'VERIFICADO', fileHash: 'old-hash',
     };
     const store = new MemoryPaymentStore({ homes, payments: [september] }, now);
     const october = SYNTHETIC_BAC_RECEIPTS.valid.replace('07/09/2026', '01/10/2026').replace('DEMOREF000001', 'DEMOREF000010');
@@ -69,7 +69,7 @@ describe('payment processor', () => {
     const septemberPending: PaymentRecord = {
       id: 'pay-sep-pending', createdAt: '2026-09-01T12:00:00.000Z', updatedAt: '2026-09-01T12:00:00.000Z', sourceMessageId: 'old-pending-msg',
       phone: '+50400000111', bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-01', reference: 'OLDPENDING001',
-      stage: 1, block: 4, house: 18, period: '2026-09', status: 'PENDIENTE_VERIFICACION', fileHash: 'old-pending-hash',
+      stage: '1', block: '4', house: '18', period: '2026-09', status: 'PENDIENTE_VERIFICACION', fileHash: 'old-pending-hash',
     };
     const store = new MemoryPaymentStore({ homes, payments: [septemberPending] }, now);
     const result = await processReceiptMessage({
@@ -97,9 +97,9 @@ describe('payment processor', () => {
     const assigned = await processHomeReply('msg-home-reply', '+50400000999', 'E1 B4 C18', { store, now });
     expect(assigned.status).toBe('PENDIENTE_VERIFICACION');
     const payment = await store.getPayment(received.paymentId!);
-    expect(payment?.stage).toBe(1);
-    expect(payment?.block).toBe(4);
-    expect(payment?.house).toBe(18);
+    expect(payment?.stage).toBe('1');
+    expect(payment?.block).toBe('4');
+    expect(payment?.house).toBe('18');
     expect(payment?.period).toBe('2026-09');
     expect(await store.getPendingByPhone('+50400000999')).toBeUndefined();
   });

@@ -1,5 +1,6 @@
 import type { HomeRecord, MonthlyCollectionStatus, MonthlyHomeStatusRow, PaymentRecord } from '@/src/domain/types';
 import type { PaymentStore } from '@/src/storage/types';
+import { compareHomes } from '@/src/domain/housing';
 
 const COUNTABLE_PAYMENT_STATUSES = new Set<PaymentRecord['status']>([
   'COMPROBANTE_RECIBIDO',
@@ -60,7 +61,7 @@ export function deriveMonthlyHomeStatus(
 ): MonthlyHomeStatusRow[] {
   return homes
     .filter((home) => isHomeActiveInPeriod(home, period))
-    .sort((a, b) => a.stage - b.stage || a.block - b.block || a.house - b.house)
+    .sort(compareHomes)
     .map((home) => {
       const matches = usablePayments(payments, home, period);
       const selected = representative(matches);

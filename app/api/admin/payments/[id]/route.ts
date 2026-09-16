@@ -4,6 +4,7 @@ import { isPeriod } from '@/src/domain/periods';
 import { buildManualVerificationUpdate } from '@/src/services/manual-verification';
 import { assignServicePeriod, hasPeriodConflict } from '@/src/services/period-assignment';
 import { getPaymentStore } from '@/src/storage';
+import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
 
 export const runtime = 'nodejs';
 
@@ -67,10 +68,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   if (action === 'assign-home') {
-    const stage = Number.parseInt(String(form.get('stage') ?? ''), 10);
-    const block = Number.parseInt(String(form.get('block') ?? ''), 10);
-    const house = Number.parseInt(String(form.get('house') ?? ''), 10);
-    if (!Number.isInteger(stage) || !Number.isInteger(block) || !Number.isInteger(house) || stage <= 0 || block <= 0 || house <= 0) {
+    const stage = normalizeHomePart(String(form.get('stage') ?? ''));
+    const block = normalizeHomePart(String(form.get('block') ?? ''));
+    const house = normalizeHomePart(String(form.get('house') ?? ''));
+    if (!isValidHome(stage, block, house)) {
       return new NextResponse('Invalid home', { status: 400 });
     }
 
@@ -79,7 +80,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!known) return new NextResponse('Home not found', { status: 400 });
 
     const allPayments = await store.listPayments();
-    const home = { stage, block, house };
+    // `known` trae la fecha de alta, que decide desde que mes se cobra.
+    const home = known;
     const newPeriod = assignServicePeriod(home, payment.transactionDate, allPayments, new Date(), payment.id);
     const reviewReason = payment.reviewReason === 'receipt_home_not_in_master' ? undefined : payment.reviewReason;
     let updated = {
