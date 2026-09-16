@@ -1,4 +1,4 @@
-import { homeLabel } from '@/src/domain/housing';
+import { compareHomeParts, homeLabel } from '@/src/domain/housing';
 import { homeKey, type DashboardSnapshot, type PaymentRecord } from '@/src/domain/types';
 import { deriveMonthlyHomeStatus, isHomeActiveInPeriod } from '@/src/services/monthly-status';
 import type { PaymentStore } from '@/src/storage/types';
@@ -40,10 +40,10 @@ export async function buildDashboardSnapshot(store: PaymentStore, period: string
     .filter((payment) => payment.stage == null || payment.block == null || payment.house == null)
     .reduce((total, payment) => total + payment.amount, 0);
 
-  const groups = new Map<string, { stage: number; block: number }>();
+  const groups = new Map<string, { stage: string; block: string }>();
   monthlyStatus.forEach((row) => groups.set(`${row.stage}:${row.block}`, { stage: row.stage, block: row.block }));
   const blocks = Array.from(groups.values())
-    .sort((a, b) => a.stage - b.stage || a.block - b.block)
+    .sort((a, b) => compareHomeParts(a.stage, b.stage) || compareHomeParts(a.block, b.block))
     .map(({ stage, block }) => {
       const rows = monthlyStatus.filter((row) => row.stage === stage && row.block === block);
       const paidHomes = rows.filter((row) => row.status === 'PAGADO').length;

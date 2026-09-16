@@ -3,7 +3,7 @@ import { HomeImportError, parseHomesImport } from '@/src/services/home-import';
 import type { HomeRecord } from '@/src/domain/types';
 
 const existing: HomeRecord[] = [
-  { id: 'home-e1-b1-c1', stage: 1, block: 1, house: 1, monthlyFee: 150, active: true },
+  { id: 'home-e1-b1-c1', stage: '1', block: '1', house: '1', monthlyFee: 150, active: true },
 ];
 
 describe('bulk housing import', () => {
@@ -14,7 +14,7 @@ describe('bulk housing import', () => {
       '1,2,4,,Persona Demo B,no,2026-08-01',
     ].join('\n'));
     expect(homes).toHaveLength(2);
-    expect(homes[0]).toMatchObject({ id: 'home-e1-b2-c3', stage: 1, block: 2, house: 3, monthlyFee: 150, active: true });
+    expect(homes[0]).toMatchObject({ id: 'home-e1-b2-c3', stage: '1', block: '2', house: '3', monthlyFee: 150, active: true });
     expect(homes[1]).toMatchObject({ id: 'home-e1-b2-c4', monthlyFee: 150, active: false });
   });
 
@@ -23,7 +23,7 @@ describe('bulk housing import', () => {
       'stage\tblock\thouse\tmonthly_fee\tresponsible\tactive',
       '2\t4\t18\t150\tPersona Demo\ttrue',
     ].join('\n');
-    expect(parseHomesImport(input)[0]).toMatchObject({ stage: 2, block: 4, house: 18, responsible: 'Persona Demo', monthlyFee: 150, active: true });
+    expect(parseHomesImport(input)[0]).toMatchObject({ stage: '2', block: '4', house: '18', responsible: 'Persona Demo', monthlyFee: 150, active: true });
   });
 
   it('rejects an address that already exists before any write can happen', () => {

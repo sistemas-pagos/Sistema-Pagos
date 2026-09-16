@@ -23,10 +23,17 @@ export const MONTHLY_COLLECTION_STATUSES = [
 
 export type MonthlyCollectionStatus = (typeof MONTHLY_COLLECTION_STATUSES)[number];
 
+/**
+ * Identidad de la vivienda: Etapa + Bloque + Casa (docs/PLAN.md, seccion 1).
+ *
+ * Son texto, no numeros, porque el residencial admite letras: el bloque A, la
+ * casa 18B. Se guardan normalizados (ver `normalizeHomePart`) para que '18' y
+ * '018' sean la misma casa y 'a' y 'A' el mismo bloque.
+ */
 export interface HomeRef {
-  stage: number;
-  block: number;
-  house: number;
+  stage: string;
+  block: string;
+  house: string;
 }
 
 export interface HomeRecord extends HomeRef {
@@ -71,9 +78,9 @@ export interface PaymentRecord {
   reference?: string;
   beneficiary?: string;
   destinationAccountMasked?: string;
-  stage?: number;
-  block?: number;
-  house?: number;
+  stage?: string;
+  block?: string;
+  house?: string;
   /** Service month paid, YYYY-MM. */
   period: string;
   status: PaymentStatus;
@@ -122,8 +129,8 @@ export interface MonthlyHomeStatusRow extends HomeRef {
 }
 
 export interface DashboardBlockSummary {
-  stage: number;
-  block: number;
+  stage: string;
+  block: string;
   totalHomes: number;
   paidHomes: number;
   verifyingHomes: number;

@@ -1,6 +1,7 @@
 import { periodWindow } from '@/src/domain/periods';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 import type { PaymentStore } from '@/src/storage/types';
+import { compareHomes } from '@/src/domain/housing';
 
 export type HousePeriodState = 'VERIFICADO' | 'RECIBIDO' | 'EN_REVISION' | 'NO_ENCONTRADO' | 'PENDIENTE';
 
@@ -45,7 +46,7 @@ export async function buildHouseHistoryGrid(store: PaymentStore, anchorPeriod: s
   const [homes, payments] = await Promise.all([store.listHomes(), store.listPayments()]);
   const rows = homes
     .filter((home) => periods.some((period) => activeInPeriod(home, period)))
-    .sort((a, b) => a.stage - b.stage || a.block - b.block || a.house - b.house)
+    .sort(compareHomes)
     .map((home) => ({
       home,
       periods: periods.map((period) => {
@@ -63,7 +64,7 @@ export async function buildHouseHistoryGrid(store: PaymentStore, anchorPeriod: s
   return { periods, rows };
 }
 
-export async function getHouseHistory(store: PaymentStore, stage: number, block: number, house: number): Promise<{ home?: HomeRecord; payments: PaymentRecord[] }> {
+export async function getHouseHistory(store: PaymentStore, stage: string, block: string, house: string): Promise<{ home?: HomeRecord; payments: PaymentRecord[] }> {
   const [homes, payments] = await Promise.all([store.listHomes(), store.listPayments()]);
   const home = homes.find((candidate) => candidate.stage === stage && candidate.block === block && candidate.house === house);
   const history = payments

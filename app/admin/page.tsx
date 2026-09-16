@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isAdminAuthenticated } from '@/src/auth/guard';
+import { compareHomeParts, normalizeHomePart } from '@/src/domain/housing';
 import { periodFromDate, isPeriod, periodLabel } from '@/src/domain/periods';
 import type { MonthlyCollectionStatus } from '@/src/domain/types';
 import { buildDashboardSnapshot } from '@/src/services/dashboard';
@@ -12,9 +13,10 @@ export const dynamic = 'force-dynamic';
 
 const money = (value: number) => `L${value.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pct = (value: number) => `${Math.round(value * 100)}%`;
-const positiveInt = (value: string | undefined): number | undefined => {
-  const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+/** Etapa y bloque llegan por query string y son texto: admiten letras. */
+const homeFilter = (value: string | undefined): string | undefined => {
+  const normalized = value ? normalizeHomePart(value) : '';
+  return normalized && normalized !== '0' ? normalized : undefined;
 };
 const HOUSE_STATE_LABEL: Record<HousePeriodState, string> = {
   VERIFICADO: '✅ Verificado',
@@ -57,17 +59,17 @@ export default async function AdminPage({
   if (!(await isAdminAuthenticated())) redirect('/login');
   const params = await searchParams;
   const period = params.period && isPeriod(params.period) ? params.period : periodFromDate();
-  const stageFilter = positiveInt(params.stage);
-  const blockFilter = positiveInt(params.block);
+  const stageFilter = homeFilter(params.stage);
+  const blockFilter = homeFilter(params.block);
   const store = await getPaymentStore();
   const [snapshot, houseGrid] = await Promise.all([
     buildDashboardSnapshot(store, period),
     buildHouseHistoryGrid(store, period, 4),
   ]);
-  const stageOptions = Array.from(new Set(snapshot.monthlyStatus.map((row) => row.stage))).sort((a, b) => a - b);
+  const stageOptions = Array.from(new Set(snapshot.monthlyStatus.map((row) => row.stage))).sort(compareHomeParts);
   const blockOptions = Array.from(new Set(snapshot.monthlyStatus
     .filter((row) => stageFilter == null || row.stage === stageFilter)
-    .map((row) => row.block))).sort((a, b) => a - b);
+    .map((row) => row.block))).sort(compareHomeParts);
   const monthlyRows = snapshot.monthlyStatus.filter((row) =>
     (stageFilter == null || row.stage === stageFilter)
     && (blockFilter == null || row.block === blockFilter),
@@ -90,13 +92,13 @@ export default async function AdminPage({
             <input id="period" name="period" type="month" defaultValue={period} style={filterControlStyle} />
           </label>
           <label htmlFor="stage" style={filterLabelStyle}>Etapa
-            <select id="stage" name="stage" defaultValue={stageFilter?.toString() ?? ''} style={filterControlStyle}>
+            <select id="stage" name="stage" defaultValue={stageFilter ?? ''} style={filterControlStyle}>
               <option value="">Todas</option>
               {stageOptions.map((stage) => <option key={stage} value={stage}>Etapa {stage}</option>)}
             </select>
           </label>
           <label htmlFor="block" style={filterLabelStyle}>Bloque
-            <select id="block" name="block" defaultValue={blockFilter?.toString() ?? ''} style={filterControlStyle}>
+            <select id="block" name="block" defaultValue={blockFilter ?? ''} style={filterControlStyle}>
               <option value="">Todos</option>
               {blockOptions.map((block) => <option key={block} value={block}>Bloque {block}</option>)}
             </select>

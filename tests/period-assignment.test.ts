@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { PaymentRecord } from '@/src/domain/types';
 import { BASE_PERIOD, assignServicePeriod, depositServicePeriod } from '@/src/services/period-assignment';
 
-const home = { stage: 1, block: 4, house: 18 };
+const home = { stage: '1', block: '4', house: '18' };
 
 function payment(period: string, id = `pay-${period}`, status: PaymentRecord['status'] = 'VERIFICADO'): PaymentRecord {
   return {
     id, createdAt: `${period}-01T00:00:00.000Z`, updatedAt: `${period}-01T00:00:00.000Z`, sourceMessageId: `msg-${id}`,
-    phone: '+50400000000', bank: 'BAC Honduras', amount: 150, stage: 1, block: 4, house: 18,
+    phone: '+50400000000', bank: 'BAC Honduras', amount: 150, stage: '1', block: '4', house: '18',
     period, status, fileHash: `hash-${id}`,
   };
 }

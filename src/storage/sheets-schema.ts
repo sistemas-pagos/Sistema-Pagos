@@ -1,4 +1,5 @@
 import { PAYMENT_STATUSES, type HomeRecord, type PaymentRecord, type PendingConversation, type ProcessedMessage } from '@/src/domain/types';
+import { normalizeHomePart } from '@/src/domain/housing';
 
 export const SHEETS = {
   payments: 'Pagos',
@@ -21,7 +22,16 @@ export const MESSAGE_HEADERS = ['message_id', 'received_at', 'kind', 'outcome'] 
 
 const cell = (value: unknown): string | number | boolean => value == null ? '' : value as string | number | boolean;
 const text = (value: unknown): string | undefined => value == null || value === '' ? undefined : String(value);
-const int = (value: unknown): number | undefined => value == null || value === '' ? undefined : Number.parseInt(String(value), 10);
+/**
+ * Etapa, bloque y casa son texto y admiten letras. Se normalizan al leer porque
+ * la hoja puede traer '018' donde el sistema guarda '18', o el numero sin
+ * comillas que la hoja devuelve como numero.
+ */
+const homePart = (value: unknown): string | undefined => {
+  if (value == null || value === '') return undefined;
+  const normalized = normalizeHomePart(String(value));
+  return normalized === '0' ? undefined : normalized;
+};
 const num = (value: unknown): number => Number.parseFloat(String(value ?? 0)) || 0;
 const bool = (value: unknown): boolean => value === true || String(value).toLowerCase() === 'true' || String(value) === '1';
 
@@ -43,7 +53,7 @@ export function paymentFromRow(row: unknown[]): PaymentRecord | undefined {
     id: String(row[0]), createdAt: String(row[1] ?? ''), updatedAt: String(row[2] ?? ''), sourceMessageId: String(row[3]),
     phone: String(row[4] ?? ''), bank: String(row[5]), depositor: text(row[6]), transactionDate: text(row[7]), transactionTime: text(row[8]),
     amount: num(row[9]), detail: text(row[10]), reference: text(row[11]), beneficiary: text(row[12]), destinationAccountMasked: text(row[13]),
-    stage: int(row[14]), block: int(row[15]), house: int(row[16]), period: String(row[17] ?? ''), status: status as PaymentRecord['status'],
+    stage: homePart(row[14]), block: homePart(row[15]), house: homePart(row[16]), period: String(row[17] ?? ''), status: status as PaymentRecord['status'],
     fileHash: String(row[19]), duplicateOf: text(row[20]), duplicateReason: text(row[21]), reviewReason: text(row[22]),
     verificationSource: text(row[23]), verifiedAt: text(row[24]), bankMovementId: text(row[25]),
   };
@@ -54,10 +64,10 @@ export function homeToRow(home: HomeRecord): Array<string | number | boolean> {
 }
 
 export function homeFromRow(row: unknown[]): HomeRecord | undefined {
-  const stage = int(row[1]);
-  const block = int(row[2]);
-  const house = int(row[3]);
-  if (!row[0] || stage == null || block == null || house == null) return undefined;
+  const stage = homePart(row[1]);
+  const block = homePart(row[2]);
+  const house = homePart(row[3]);
+  if (!row[0] || !stage || !block || !house) return undefined;
   return { id: String(row[0]), stage, block, house, responsible: text(row[4]), monthlyFee: num(row[5]), active: bool(row[6]), startDate: text(row[7]), endDate: text(row[8]) };
 }
 

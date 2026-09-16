@@ -7,7 +7,7 @@ import { MemoryPaymentStore } from '@/src/storage/memory';
 function payment(overrides: Partial<PaymentRecord> = {}): PaymentRecord {
   return {
     id: 'pay-1', createdAt: '2026-09-08T10:00:00.000Z', updatedAt: '2026-09-08T10:00:00.000Z', sourceMessageId: 'msg-1', phone: '+50400000001',
-    bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-08', reference: 'BANKREF001', stage: 1, block: 4, house: 18,
+    bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-08', reference: 'BANKREF001', stage: '1', block: '4', house: '18',
     period: '2026-09', status: 'PENDIENTE_VERIFICACION', fileHash: 'hash-1', ...overrides,
   };
 }
@@ -51,8 +51,8 @@ describe('bank reconciliation', () => {
 
   it('never lets one bank movement verify two payment records in the same run', async () => {
     const store = new MemoryPaymentStore({ payments: [
-      payment({ id: 'pay-1', sourceMessageId: 'msg-1', fileHash: 'hash-1', stage: 1, block: 4, house: 18 }),
-      payment({ id: 'pay-2', sourceMessageId: 'msg-2', fileHash: 'hash-2', stage: 1, block: 4, house: 19 }),
+      payment({ id: 'pay-1', sourceMessageId: 'msg-1', fileHash: 'hash-1', stage: '1', block: '4', house: '18' }),
+      payment({ id: 'pay-2', sourceMessageId: 'msg-2', fileHash: 'hash-2', stage: '1', block: '4', house: '19' }),
     ] });
     const result = await reconcilePendingPayments(store, [{ id: 'mov-1', bank: 'BAC Honduras', reference: 'BANKREF001', amount: 150, transactionDate: '2026-09-08' }], 'synthetic-bank-file');
     expect(result.verified).toBe(0);
