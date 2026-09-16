@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 describe('payment processor', () => {
-  it('registers a valid BAC receipt and assigns August when it is the first pending month', async () => {
+  it('registers a valid BAC receipt and assigns the first billable month', async () => {
     const store = new MemoryPaymentStore({ homes }, now);
     const result = await processReceiptMessage({
       messageId: 'msg-valid', phone: '+50400000999', bytes: png(1), declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
@@ -45,38 +45,39 @@ describe('payment processor', () => {
     expect(payment.stage).toBe(1);
     expect(payment.block).toBe(4);
     expect(payment.house).toBe(18);
-    expect(payment.period).toBe('2026-08');
+    expect(payment.period).toBe('2026-09');
     expect(payment.status).not.toBe('VERIFICADO');
   });
 
-  it('uses September when August already has a verified payment for the same EBC home', async () => {
-    const august: PaymentRecord = {
-      id: 'pay-aug', createdAt: '2026-08-31T12:00:00.000Z', updatedAt: '2026-08-31T12:00:00.000Z', sourceMessageId: 'old-msg',
-      phone: '+50400000111', bank: 'BAC Honduras', amount: 150, transactionDate: '2026-08-31', reference: 'OLDREF001',
-      stage: 1, block: 4, house: 18, period: '2026-08', status: 'VERIFICADO', fileHash: 'old-hash',
+  it('advances to October when September already has a verified payment for the same EBC home', async () => {
+    const september: PaymentRecord = {
+      id: 'pay-sep', createdAt: '2026-09-30T12:00:00.000Z', updatedAt: '2026-09-30T12:00:00.000Z', sourceMessageId: 'old-msg',
+      phone: '+50400000111', bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-30', reference: 'OLDREF001',
+      stage: 1, block: 4, house: 18, period: '2026-09', status: 'VERIFICADO', fileHash: 'old-hash',
     };
-    const store = new MemoryPaymentStore({ homes, payments: [august] }, now);
+    const store = new MemoryPaymentStore({ homes, payments: [september] }, now);
+    const october = SYNTHETIC_BAC_RECEIPTS.valid.replace('07/09/2026', '01/10/2026').replace('DEMOREF000001', 'DEMOREF000010');
     const result = await processReceiptMessage({
-      messageId: 'msg-september', phone: '+50400000999', bytes: png(7), declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
+      messageId: 'msg-october', phone: '+50400000999', bytes: png(7), declaredMime: 'image/png', syntheticOcrText: october,
     }, { store, now });
     expect(result.status).toBe('PENDIENTE_VERIFICACION');
-    const payment = (await store.listPayments()).find((item) => item.id !== 'pay-aug');
-    expect(payment?.period).toBe('2026-09');
+    const payment = (await store.listPayments()).find((item) => item.id !== 'pay-sep');
+    expect(payment?.period).toBe('2026-10');
   });
 
-  it('keeps a second receipt on August and sends it to review when the first August receipt is still unverified', async () => {
-    const augustPending: PaymentRecord = {
-      id: 'pay-aug-pending', createdAt: '2026-09-01T12:00:00.000Z', updatedAt: '2026-09-01T12:00:00.000Z', sourceMessageId: 'old-pending-msg',
+  it('sends a second receipt to review when every month up to the deposit month is taken', async () => {
+    const septemberPending: PaymentRecord = {
+      id: 'pay-sep-pending', createdAt: '2026-09-01T12:00:00.000Z', updatedAt: '2026-09-01T12:00:00.000Z', sourceMessageId: 'old-pending-msg',
       phone: '+50400000111', bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-01', reference: 'OLDPENDING001',
-      stage: 1, block: 4, house: 18, period: '2026-08', status: 'PENDIENTE_VERIFICACION', fileHash: 'old-pending-hash',
+      stage: 1, block: 4, house: 18, period: '2026-09', status: 'PENDIENTE_VERIFICACION', fileHash: 'old-pending-hash',
     };
-    const store = new MemoryPaymentStore({ homes, payments: [augustPending] }, now);
+    const store = new MemoryPaymentStore({ homes, payments: [septemberPending] }, now);
     const result = await processReceiptMessage({
-      messageId: 'msg-second-august', phone: '+50400000999', bytes: png(10), declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
+      messageId: 'msg-second-september', phone: '+50400000999', bytes: png(10), declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
     }, { store, now });
     expect(result.status).toBe('EN_REVISION');
-    const payment = (await store.listPayments()).find((item) => item.id !== 'pay-aug-pending');
-    expect(payment?.period).toBe('2026-08');
+    const payment = (await store.listPayments()).find((item) => item.id !== 'pay-sep-pending');
+    expect(payment?.period).toBe('2026-09');
     expect(payment?.reviewReason).toBe('service_period_already_has_payment');
   });
 
@@ -99,7 +100,7 @@ describe('payment processor', () => {
     expect(payment?.stage).toBe(1);
     expect(payment?.block).toBe(4);
     expect(payment?.house).toBe(18);
-    expect(payment?.period).toBe('2026-08');
+    expect(payment?.period).toBe('2026-09');
     expect(await store.getPendingByPhone('+50400000999')).toBeUndefined();
   });
 

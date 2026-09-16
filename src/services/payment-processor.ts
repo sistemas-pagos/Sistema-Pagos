@@ -4,12 +4,12 @@ import { decideDuplicate } from '@/src/domain/duplicates';
 import { parseHomeReference } from '@/src/domain/housing';
 import { periodLabel } from '@/src/domain/periods';
 import { samePhone } from '@/src/domain/phone';
-import type { HomeRef, PaymentRecord, PendingConversation, ProcessedMessage } from '@/src/domain/types';
+import type { HomeRecord, HomeRef, PaymentRecord, PendingConversation, ProcessedMessage } from '@/src/domain/types';
 import { recognizeReceipt } from '@/src/ocr/tesseract';
 import { detectAndParseReceipt } from '@/src/parsers';
 import { validateReceiptFile } from '@/src/security/files';
 import type { PaymentStore } from '@/src/storage/types';
-import { assignServicePeriod, baselinePeriodFromDepositDate, hasPeriodConflict } from './period-assignment';
+import { assignServicePeriod, depositServicePeriod, hasPeriodConflict } from './period-assignment';
 import { receiptReviewReason } from './validation';
 
 export interface ProcessorDependencies {
@@ -107,16 +107,18 @@ function duplicateRecord(original: PaymentRecord, input: ReceiptMessageInput, fi
   };
 }
 
-async function resolveHome(store: PaymentStore, parsedHome: HomeRef | undefined): Promise<{ home?: HomeRef; warning?: string }> {
+async function resolveHome(store: PaymentStore, parsedHome: HomeRef | undefined): Promise<{ home?: HomeRecord; warning?: string }> {
   if (!parsedHome) return {};
   const homes = await store.listHomes();
+  // Se devuelve la ficha del padron, no solo la referencia: la fecha de alta
+  // decide desde que mes se le cobra a esta vivienda (invariante 5).
   const match = homes.find((home) =>
     home.active
     && home.stage === parsedHome.stage
     && home.block === parsedHome.block
     && home.house === parsedHome.house,
   );
-  if (match) return { home: parsedHome };
+  if (match) return { home: match };
   return { warning: 'receipt_home_not_in_master' };
 }
 
@@ -234,7 +236,7 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
 
     const period = home
       ? assignServicePeriod(home, extraction.transactionDate, existing, now)
-      : baselinePeriodFromDepositDate(extraction.transactionDate, now);
+      : depositServicePeriod(extraction.transactionDate, now);
 
     let record: PaymentRecord = {
       id: deterministicId('pay', input.messageId),
@@ -326,7 +328,8 @@ export async function processHomeReply(messageId: string, phone: string, body: s
   }
 
   const allPayments = await store.listPayments();
-  const period = assignServicePeriod(home, payment.transactionDate, allPayments, now, payment.id);
+  // `known` es la ficha del padron: trae la fecha de alta de la vivienda.
+  const period = assignServicePeriod(known, payment.transactionDate, allPayments, now, payment.id);
   const clearedReason = payment.reviewReason === 'receipt_home_not_in_master' ? undefined : payment.reviewReason;
   let updated: PaymentRecord = {
     ...payment,
