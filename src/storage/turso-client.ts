@@ -35,3 +35,19 @@ export async function createTursoClient(config: TursoConfig): Promise<Client> {
 export function createInMemoryClient(): Promise<Client> {
   return createTursoClient({ url: ':memory:' });
 }
+
+let cached: Promise<Client> | undefined;
+
+/**
+ * Cliente compartido para el webhook. La funcion serverless se reutiliza entre
+ * invocaciones, asi que conviene no abrir una conexion por request.
+ */
+export function getTursoClient(): Promise<Client> {
+  cached ??= createTursoClient(tursoConfigFromEnv());
+  return cached;
+}
+
+/** Solo para pruebas: olvida el cliente compartido. */
+export function resetTursoClientForTests(): void {
+  cached = undefined;
+}

@@ -30,6 +30,12 @@ const envSchema = z.object({
   ),
   EXPECTED_BENEFICIARY: optionalString,
   EXPECTED_ACCOUNT_LAST4: optionalLast4,
+  // Turso: fuente de verdad del registro de mensajes (fase 1 en adelante).
+  PAGOS_TURSO_URL: optionalString,
+  PAGOS_TURSO_TOKEN: optionalString,
+  // repository_dispatch hacia GitHub Actions, que hace el trabajo pesado.
+  PAGOS_GITHUB_REPO: optionalString,
+  PAGOS_DISPATCH_TOKEN: optionalString,
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

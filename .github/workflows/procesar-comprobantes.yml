@@ -1,0 +1,55 @@
+name: Procesar comprobantes
+
+# El webhook avisa con repository_dispatch apenas llega un mensaje. El cron es el
+# respaldo: si el aviso se pierde, la cola se vacia igual (docs/PLAN.md, seccion 5).
+on:
+  repository_dispatch:
+    types: [procesar-comprobantes]
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Una sola corrida a la vez. Nunca se cancela a mitad: cortar una corrida deja
+# mensajes en PROCESANDO y obliga a reintentarlos.
+concurrency:
+  group: procesar-comprobantes
+  cancel-in-progress: false
+
+jobs:
+  procesar:
+    runs-on: ubuntu-latest
+    environment: pagos-produccion
+    timeout-minutes: 15
+    env:
+      APP_MODE: production
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # El script solo registra contadores y message_id enmascarados: ni telefonos,
+      # ni Etapa/Bloque/Casa, ni montos, ni referencias (invariante 12).
+      - name: Procesar cola de mensajes
+        env:
+          PAGOS_TURSO_URL: ${{ secrets.PAGOS_TURSO_URL }}
+          PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          EXPECTED_BENEFICIARY: ${{ secrets.EXPECTED_BENEFICIARY }}
+          EXPECTED_ACCOUNT_LAST4: ${{ secrets.EXPECTED_ACCOUNT_LAST4 }}
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/procesar-comprobantes.ts

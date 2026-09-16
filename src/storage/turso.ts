@@ -47,6 +47,8 @@ export interface MensajeInput {
   telefono: string;
   tipo: string;
   mediaId?: string;
+  /** Texto del mensaje; se borra al cerrarlo, igual que el media_id. */
+  cuerpo?: string;
   estado: EstadoMensaje;
   recibidoEn: string;
 }
@@ -157,14 +159,15 @@ export async function crearVivienda(db: Db, vivienda: ViviendaInput, actor: stri
  */
 export async function registrarMensaje(db: Db, mensaje: MensajeInput): Promise<boolean> {
   const resultado = await (db as Executor).execute({
-    sql: `INSERT INTO mensajes (message_id, telefono, tipo, media_id, estado, recibido_en, actualizado_en)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+    sql: `INSERT INTO mensajes (message_id, telefono, tipo, media_id, cuerpo, estado, recibido_en, actualizado_en)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (message_id) DO NOTHING`,
     args: [
       mensaje.messageId,
       mensaje.telefono,
       mensaje.tipo,
       mensaje.mediaId ?? null,
+      mensaje.cuerpo ?? null,
       mensaje.estado,
       mensaje.recibidoEn,
       mensaje.recibidoEn,
@@ -309,5 +312,77 @@ export async function emitirRecibo(
     }, input.emitidoEn);
 
     return numero;
+  });
+}
+
+export interface MensajePendiente {
+  messageId: string;
+  telefono: string;
+  tipo: string;
+  mediaId: string | null;
+  cuerpo: string | null;
+  intentos: number;
+  recibidoEn: string;
+}
+
+/**
+ * Mensajes que el worker todavia tiene que procesar. `PROCESANDO` vuelve a la
+ * lista porque una corrida cortada a la mitad deja el mensaje en ese estado y
+ * nadie mas lo va a retomar. `limiteIntentos` evita reintentar para siempre.
+ */
+export async function mensajesPendientes(
+  db: Db,
+  limiteIntentos = 3,
+  limite = 50,
+): Promise<MensajePendiente[]> {
+  const { rows } = await (db as Executor).execute({
+    sql: `SELECT message_id, telefono, tipo, media_id, cuerpo, intentos, recibido_en
+          FROM mensajes
+          WHERE estado IN ('RECIBIDO','PROCESANDO') AND intentos < ?
+          ORDER BY recibido_en
+          LIMIT ?`,
+    args: [limiteIntentos, limite],
+  });
+
+  return rows.map((row) => ({
+    messageId: String(row.message_id),
+    telefono: String(row.telefono),
+    tipo: String(row.tipo),
+    mediaId: row.media_id === null ? null : String(row.media_id),
+    cuerpo: row.cuerpo === null ? null : String(row.cuerpo),
+    intentos: Number(row.intentos),
+    recibidoEn: String(row.recibido_en),
+  }));
+}
+
+/**
+ * Toma un mensaje para procesarlo y suma un intento. Devuelve `false` si otra
+ * corrida ya lo termino, de modo que dos corridas simultaneas no lo procesan
+ * dos veces.
+ */
+export async function tomarMensaje(db: Db, messageId: string, ahora: string): Promise<boolean> {
+  const resultado = await (db as Executor).execute({
+    sql: `UPDATE mensajes
+          SET estado = 'PROCESANDO', intentos = intentos + 1, actualizado_en = ?
+          WHERE message_id = ? AND estado IN ('RECIBIDO','PROCESANDO')`,
+    args: [ahora, messageId],
+  });
+
+  return resultado.rowsAffected > 0;
+}
+
+/**
+ * Cierra un mensaje. Al terminar se borra el `media_id`: la imagen no se guarda
+ * y el identificador tampoco sobrevive al procesamiento (invariante 11).
+ */
+export async function cerrarMensaje(
+  db: Db,
+  input: { messageId: string; estado: EstadoMensaje; error?: string; actualizadoEn: string },
+): Promise<void> {
+  await (db as Executor).execute({
+    sql: `UPDATE mensajes
+          SET estado = ?, error = ?, media_id = NULL, cuerpo = NULL, actualizado_en = ?
+          WHERE message_id = ?`,
+    args: [input.estado, input.error ?? null, input.actualizadoEn, input.messageId],
   });
 }

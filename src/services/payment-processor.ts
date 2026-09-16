@@ -35,8 +35,6 @@ export interface ProcessOutcome {
   reason?: string;
 }
 
-const activeMessages = new Set<string>();
-
 function deterministicId(prefix: string, value: string): string {
   return `${prefix}_${createHash('sha256').update(value).digest('hex').slice(0, 24)}`;
 }
@@ -124,11 +122,13 @@ async function resolveHome(store: PaymentStore, parsedHome: HomeRef | undefined)
 
 export async function processReceiptMessage(input: ReceiptMessageInput, deps: ProcessorDependencies): Promise<ProcessOutcome> {
   const { store } = deps;
-  if (activeMessages.has(input.messageId)) return { action: 'silent', reason: 'technical_retry_in_flight' };
+  // La idempotencia vive en la tabla `mensajes` de Turso, cuya clave primaria es
+  // el message_id: el webhook la inserta antes de encolar nada, y el worker toma
+  // cada mensaje una sola vez. Ya no hace falta un Set en memoria, que ademas no
+  // servia con varias instancias (docs/PLAN.md, fase 1).
   if (await store.hasProcessedMessage(input.messageId)) return { action: 'silent', reason: 'technical_retry' };
 
-  activeMessages.add(input.messageId);
-  try {
+  {
     const now = deps.now?.() ?? new Date();
     const at = now.toISOString();
     const kind = input.kind ?? 'image';
@@ -285,8 +285,6 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
     if (shouldAskHome) return { action: 'reply', reply: unidentifiedReply(record), paymentId: record.id, status: record.status, reason: reviewReason };
     if (pendingConflict || record.status === 'EN_REVISION') return { action: 'reply', reply: reviewReply(), paymentId: record.id, status: record.status, reason: record.reviewReason };
     return { action: 'reply', reply: receiptAcceptedReply(record), paymentId: record.id, status: record.status };
-  } finally {
-    activeMessages.delete(input.messageId);
   }
 }
 
