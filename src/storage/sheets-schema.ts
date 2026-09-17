@@ -17,7 +17,7 @@ export const PAYMENT_HEADERS = [
   'verification_source', 'verified_at', 'bank_movement_id',
 ] as const;
 export const HOME_HEADERS = ['id', 'stage', 'block', 'house', 'responsible', 'monthly_fee', 'active', 'start_date', 'end_date'] as const;
-export const PENDING_HEADERS = ['id', 'phone', 'payment_id', 'created_at', 'expires_at'] as const;
+export const PENDING_HEADERS = ['id', 'phone', 'payment_id', 'created_at', 'expires_at', 'attempts'] as const;
 export const MESSAGE_HEADERS = ['message_id', 'received_at', 'kind', 'outcome'] as const;
 
 const cell = (value: unknown): string | number | boolean => value == null ? '' : value as string | number | boolean;
@@ -72,12 +72,19 @@ export function homeFromRow(row: unknown[]): HomeRecord | undefined {
 }
 
 export function pendingToRow(pending: PendingConversation): string[] {
-  return [pending.id, pending.phone, pending.paymentId, pending.createdAt, pending.expiresAt];
+  return [pending.id, pending.phone, pending.paymentId, pending.createdAt, pending.expiresAt, String(pending.attempts)];
 }
 
 export function pendingFromRow(row: unknown[]): PendingConversation | undefined {
   if (!row[0] || !row[1] || !row[2]) return undefined;
-  return { id: String(row[0]), phone: String(row[1]), paymentId: String(row[2]), createdAt: String(row[3] ?? ''), expiresAt: String(row[4] ?? '') };
+  // Las filas escritas antes de que existiera la columna no traen intentos; se
+  // leen como cero en vez de NaN, que envenenaria la comparacion con el limite.
+  const attempts = Number(row[5] ?? 0);
+  return {
+    id: String(row[0]), phone: String(row[1]), paymentId: String(row[2]),
+    createdAt: String(row[3] ?? ''), expiresAt: String(row[4] ?? ''),
+    attempts: Number.isFinite(attempts) ? attempts : 0,
+  };
 }
 
 export function messageToRow(message: ProcessedMessage): string[] {

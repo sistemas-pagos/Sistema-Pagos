@@ -49,6 +49,46 @@ function dateLabel(iso: string | undefined): string {
   return `${day}/${month}/${year}`;
 }
 
+/**
+ * Debajo de esta confianza el texto del OCR no sirve para nada: los campos
+ * salen a medias o inventados. Es el mismo umbral con el que `validation`
+ * mandaba el pago a revision; la diferencia es que ahora se pide otra foto.
+ */
+const CONFIANZA_MINIMA_OCR = 0.55;
+
+/**
+ * Respuestas de vivienda que no sirvieron antes de pasar el caso a una persona.
+ *
+ * Tres es suficiente para un error de tipeo y poco para que el vecino sienta
+ * que el bot no lo entiende. Sin limite, alguien que no sabe su etapa recibe la
+ * misma pregunta indefinidamente y el pago no avanza nunca.
+ */
+const MAX_INTENTOS_VIVIENDA = 3;
+
+/**
+ * La foto no se puede leer.
+ *
+ * Se pide otra en vez de mandar el caso a revision porque las imagenes no se
+ * guardan (invariante 11): quien revisara despues tampoco podria verla. Y se
+ * pide ahora, no manana, porque el vecino todavia tiene el comprobante a mano.
+ *
+ * El mensaje dice que no quedo registrado nada. Callarlo dejaria a alguien
+ * creyendo que ya pago.
+ */
+function fotoIlegibleReply(motivo = 'No logramos leer el comprobante.'): string {
+  return [
+    `📸 ${motivo} No quedó registrado ningún pago.`,
+    'Volvé a tomar la foto de cerca, con buena luz, y que se lean el monto y el número de referencia.',
+  ].join('\n');
+}
+
+function noEsComprobanteReply(): string {
+  return [
+    'No reconocimos un comprobante de pago en esa imagen. No se registró ningún pago.',
+    'Si es un comprobante del banco, enviá la captura completa, sin recortar los bordes.',
+  ].join('\n');
+}
+
 function receiptAcceptedReply(payment: PaymentRecord): string {
   const lines = [
     '✅ Comprobante recibido',
@@ -64,9 +104,41 @@ function receiptAcceptedReply(payment: PaymentRecord): string {
 
 function unidentifiedReply(payment: PaymentRecord): string {
   return [
-    `Recibimos tu comprobante por ${amountLabel(payment.amount)}, pero falta identificar completamente la vivienda.`,
-    'Por favor responde con etapa, bloque y casa.',
-    'Ejemplo: E1 B4 C18',
+    `Recibimos tu comprobante por ${amountLabel(payment.amount)}, pero falta saber de qué vivienda es.`,
+    'Respondé con etapa, bloque y casa. Por ejemplo: E1 B4 C18',
+    'También sirve escribirlo: "etapa 1, bloque 4, casa 18".',
+  ].join('\n');
+}
+
+/**
+ * Se repite el ejemplo en cada intento en vez de reprochar. Quien contesta mal
+ * dos veces no esta siendo descuidado: no entendio que le estan pidiendo.
+ */
+function viviendaNoEntendidaReply(intento: number): string {
+  const restantes = MAX_INTENTOS_VIVIENDA - intento;
+  const cierre = restantes === 1
+    ? 'Si no sale esta vez, lo revisa una persona.'
+    : 'Escribí solo la vivienda, sin el nombre ni el mes.';
+  return [
+    'No logramos identificar la vivienda.',
+    'Necesitamos las tres cosas: etapa, bloque y casa. Por ejemplo: E1 B4 C18',
+    cierre,
+  ].join('\n');
+}
+
+function viviendaDesconocidaReply(intento: number): string {
+  const restantes = MAX_INTENTOS_VIVIENDA - intento;
+  return [
+    'Esa vivienda no aparece en el padrón.',
+    'Revisá la etapa, el bloque y la casa.',
+    restantes === 1 ? 'Si no sale esta vez, lo revisa una persona.' : 'Por ejemplo: E1 B4 C18',
+  ].join('\n');
+}
+
+function aRevisionHumanaReply(): string {
+  return [
+    'No pudimos identificar la vivienda, así que lo va a revisar una persona.',
+    'Tu comprobante está guardado: no hace falta que lo envíes de nuevo.',
   ].join('\n');
 }
 
@@ -175,7 +247,16 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
       ocrConfidence = ocrResult.confidence;
     } catch {
       await markMessage(store, input.messageId, kind, 'rejected', at);
-      return { action: 'reply', reply: 'No pudimos leer el comprobante. Envíalo nuevamente como una imagen clara.', reason: 'ocr_failed' };
+      return { action: 'reply', reply: fotoIlegibleReply(), reason: 'ocr_failed' };
+    }
+
+    // Una foto que no se puede leer no se manda a revision humana: las imagenes
+    // no se guardan (invariante 11), asi que quien la revisara despues tampoco
+    // podria leerla. Lo unico util es pedir otra ahora, mientras el vecino tiene
+    // el comprobante en la mano; en diez minutos ya no lo tiene.
+    if (ocrConfidence > 0 && ocrConfidence < CONFIANZA_MINIMA_OCR) {
+      await markMessage(store, input.messageId, kind, 'processed', at);
+      return { action: 'reply', reply: fotoIlegibleReply(), reason: 'ocr_low_confidence' };
     }
 
     let extraction;
@@ -184,12 +265,14 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
       extraction.confidence = Math.min(extraction.confidence, ocrConfidence || extraction.confidence);
     } catch {
       await markMessage(store, input.messageId, kind, 'rejected', at);
-      return { action: 'reply', reply: 'No pudimos identificar un comprobante BAC válido. No se registró ningún pago.', reason: 'unsupported_receipt' };
+      return { action: 'reply', reply: noEsComprobanteReply(), reason: 'unsupported_receipt' };
     }
 
+    // El monto es el unico dato sin el que no hay pago posible. Que no se lea
+    // suele ser la foto, no el comprobante, asi que se pide otra.
     if (!extraction.amount || extraction.amount <= 0) {
-      await markMessage(store, input.messageId, kind, 'rejected', at);
-      return { action: 'reply', reply: 'No pudimos leer el monto del comprobante. No se registró ningún pago.', reason: 'amount_missing' };
+      await markMessage(store, input.messageId, kind, 'processed', at);
+      return { action: 'reply', reply: fotoIlegibleReply('No pudimos leer el monto.'), reason: 'amount_missing' };
     }
 
     const homeResolution = await resolveHome(store, extraction.home);
@@ -278,6 +361,7 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
         paymentId: record.id,
         createdAt: at,
         expiresAt: new Date(now.getTime() + minutes * 60_000).toISOString(),
+        attempts: 0,
       };
       await store.savePending(pending);
     }
@@ -304,8 +388,7 @@ export async function processHomeReply(messageId: string, phone: string, body: s
 
   const home = parseHomeReference(body);
   if (!home) {
-    await markMessage(store, messageId, 'text', 'processed', at);
-    return { action: 'reply', reply: 'No pudimos identificar etapa, bloque y casa completos. Responde, por ejemplo: E1 B4 C18', paymentId: pending.paymentId, reason: 'invalid_home_reply' };
+    return respuestaQueNoSirvio(store, pending, messageId, at, 'invalid_home_reply', viviendaNoEntendidaReply);
   }
 
   const homes = await store.listHomes();
@@ -316,8 +399,7 @@ export async function processHomeReply(messageId: string, phone: string, body: s
     && candidate.house === home.house,
   );
   if (!known) {
-    await markMessage(store, messageId, 'text', 'processed', at);
-    return { action: 'reply', reply: 'No encontramos esa vivienda activa. Verifica etapa, bloque y casa e inténtalo de nuevo.', paymentId: pending.paymentId, reason: 'home_not_found' };
+    return respuestaQueNoSirvio(store, pending, messageId, at, 'home_not_found', viviendaDesconocidaReply);
   }
 
   const payment = await store.getPayment(pending.paymentId);
@@ -354,6 +436,49 @@ export async function processHomeReply(messageId: string, phone: string, body: s
     ? `✅ Vivienda identificada: Etapa ${home.stage}, Bloque ${home.block}, Casa ${home.house}. El comprobante continúa en revisión.`
     : `✅ Comprobante registrado para Etapa ${home.stage}, Bloque ${home.block}, Casa ${home.house}. Mes aplicado: ${periodLabel(updated.period)}. Estado: pendiente de verificación.`;
   return { action: 'reply', reply, paymentId: updated.id, status: updated.status };
+}
+
+/**
+ * Cuenta una respuesta que no sirvio y decide si vale la pena volver a preguntar.
+ *
+ * Al agotar los intentos el pago pasa a revision humana en vez de quedarse en
+ * ESPERANDO_RESPUESTA para siempre: ahi el dinero ya entro al banco y alguien
+ * tiene que decidir de quien es, cosa que el bot ya demostro que no puede.
+ */
+async function respuestaQueNoSirvio(
+  store: PaymentStore,
+  pending: PendingConversation,
+  messageId: string,
+  at: string,
+  reason: string,
+  mensaje: (intento: number) => string,
+): Promise<ProcessOutcome> {
+  const intentos = pending.attempts + 1;
+  await markMessage(store, messageId, 'text', 'processed', at);
+
+  if (intentos < MAX_INTENTOS_VIVIENDA) {
+    await store.savePending({ ...pending, attempts: intentos });
+    return { action: 'reply', reply: mensaje(intentos), paymentId: pending.paymentId, reason };
+  }
+
+  await store.clearPending(pending.phone);
+  const payment = await store.getPayment(pending.paymentId);
+  if (payment) {
+    await store.updatePayment({
+      ...payment,
+      status: 'EN_REVISION',
+      reviewReason: 'home_reply_attempts_exhausted',
+      updatedAt: at,
+    });
+  }
+
+  return {
+    action: 'reply',
+    reply: aRevisionHumanaReply(),
+    paymentId: pending.paymentId,
+    status: 'EN_REVISION',
+    reason: 'home_reply_attempts_exhausted',
+  };
 }
 
 export async function ignoreWhatsAppMessage(messageId: string, kind: ProcessedMessage['kind'], store: PaymentStore, at = new Date()): Promise<void> {
