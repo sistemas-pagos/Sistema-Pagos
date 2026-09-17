@@ -40,6 +40,10 @@ const envSchema = z.object({
     enBlancoEsAusente,
     z.string().trim().regex(/^v\d+\.\d+$/).default('v26.0'),
   ),
+  // Plantilla aprobada en Meta con la que sale el recibo (invariante 13). El
+  // nombre tiene que coincidir con el aprobado; si no, Meta rechaza el envio.
+  WHATSAPP_TEMPLATE_RECIBO: z.preprocess(enBlancoEsAusente, z.string().trim().min(1).default('recibo_pago')),
+  WHATSAPP_TEMPLATE_IDIOMA: z.preprocess(enBlancoEsAusente, z.string().trim().min(2).default('es')),
   EXPECTED_BENEFICIARY: optionalString,
   EXPECTED_ACCOUNT_LAST4: optionalLast4,
   // Turso: fuente de verdad del registro de mensajes (fase 1 en adelante).

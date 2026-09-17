@@ -1,8 +1,9 @@
 import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ACTOR, CUOTA_CENTAVOS, contar, nuevaBaseDePrueba, sembrar } from './helpers/turso-test-db';
+import { ACTOR, PLANTILLA, CUOTA_CENTAVOS, contar, nuevaBaseDePrueba, sembrar } from './helpers/turso-test-db';
+import { formatoRecibo } from '@/src/domain/recibo';
 import {
-  codigoVivienda, crearPago, crearVivienda, emitirRecibo, enTransaccion, formatoRecibo,
+  codigoVivienda, crearPago, crearVivienda,
   olvidarMedia, registrarMensaje, reservarMeses, verificarPagoConMovimiento,
 } from '@/src/storage/turso';
 
@@ -99,12 +100,9 @@ describe('transacciones', () => {
       meses: [{ periodo: '2026-09', montoCentavos: CUOTA_CENTAVOS }], actor: ACTOR, creadoEn: ALTA,
     });
 
-    const numero = await enTransaccion(db, async (tx) => {
-      await verificarPagoConMovimiento(tx, {
-        pagoId: 'p1', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA,
-      }, ACTOR);
-      return emitirRecibo(tx, { pagoId: 'p1', emitidoEn: ALTA, actor: ACTOR });
-    });
+    const numero = await verificarPagoConMovimiento(db, {
+      pagoId: 'p1', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA, plantilla: PLANTILLA,
+    }, ACTOR);
 
     expect(formatoRecibo(numero)).toBe('REC-000001');
     const { rows } = await db.execute("SELECT estado FROM pago_meses WHERE pago_id = 'p1'");

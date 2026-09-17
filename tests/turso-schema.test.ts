@@ -2,7 +2,7 @@ import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { applyPendingMigrations, splitLeadingPragmas } from '@/src/storage/migrations';
 import { createInMemoryClient } from '@/src/storage/turso-client';
-import { ACTOR, CUOTA_CENTAVOS, contar, nuevaBaseDePrueba, sembrar } from './helpers/turso-test-db';
+import { ACTOR, PLANTILLA, CUOTA_CENTAVOS, contar, nuevaBaseDePrueba, sembrar } from './helpers/turso-test-db';
 import {
   crearPago, crearVivienda, emitirRecibo, liberarMeses, registrarEvento,
   registrarMensaje, reservarMeses, verificarPagoConMovimiento,
@@ -74,23 +74,23 @@ describe('restricciones del esquema', () => {
     await pago('p2');
 
     await verificarPagoConMovimiento(db, {
-      pagoId: 'p1', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA,
+      pagoId: 'p1', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA, plantilla: PLANTILLA,
     }, ACTOR);
 
     await expect(verificarPagoConMovimiento(db, {
-      pagoId: 'p2', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA,
+      pagoId: 'p2', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA, plantilla: PLANTILLA,
     }, ACTOR)).rejects.toThrow(/UNIQUE/i);
 
     const { rows } = await db.execute("SELECT id FROM pagos WHERE estado = 'VERIFICADO'");
     expect(rows.map((row) => row.id)).toEqual(['p1']);
   });
 
-  it('un pago tiene un solo recibo', async () => {
+  it('un pago no puede tener dos recibos emitidos a la vez', async () => {
     await vivienda();
     await pago('p1');
 
-    await emitirRecibo(db, { pagoId: 'p1', emitidoEn: ALTA, actor: ACTOR });
-    await expect(emitirRecibo(db, { pagoId: 'p1', emitidoEn: ALTA, actor: ACTOR }))
+    await emitirRecibo(db, { pagoId: 'p1', emitidoEn: ALTA, actor: ACTOR, plantilla: PLANTILLA });
+    await expect(emitirRecibo(db, { pagoId: 'p1', emitidoEn: ALTA, actor: ACTOR, plantilla: PLANTILLA }))
       .rejects.toThrow(/UNIQUE/i);
     expect(await contar(db, 'recibos')).toBe(1);
   });
@@ -99,10 +99,10 @@ describe('restricciones del esquema', () => {
     await vivienda();
     for (const id of ['p1', 'p2', 'p3']) await pago(id);
 
-    const primero = await emitirRecibo(db, { pagoId: 'p1', emitidoEn: ALTA, actor: ACTOR });
-    const segundo = await emitirRecibo(db, { pagoId: 'p2', emitidoEn: ALTA, actor: ACTOR });
+    const primero = await emitirRecibo(db, { pagoId: 'p1', emitidoEn: ALTA, actor: ACTOR, plantilla: PLANTILLA });
+    const segundo = await emitirRecibo(db, { pagoId: 'p2', emitidoEn: ALTA, actor: ACTOR, plantilla: PLANTILLA });
     await db.execute({ sql: 'DELETE FROM recibos WHERE numero = ?', args: [segundo] });
-    const tercero = await emitirRecibo(db, { pagoId: 'p3', emitidoEn: ALTA, actor: ACTOR });
+    const tercero = await emitirRecibo(db, { pagoId: 'p3', emitidoEn: ALTA, actor: ACTOR, plantilla: PLANTILLA });
 
     expect(primero).toBe(1);
     expect(segundo).toBe(2);
@@ -130,7 +130,7 @@ describe('restricciones del esquema', () => {
     const mes = [{ periodo: '2026-09', montoCentavos: CUOTA_CENTAVOS }];
     await reservarMeses(db, { pagoId: 'p1', viviendaId: 'v1', meses: mes, actor: ACTOR, creadoEn: ALTA });
     await verificarPagoConMovimiento(db, {
-      pagoId: 'p1', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA,
+      pagoId: 'p1', movimientoId: 'mov1', verificadoPor: 'u1', verificadoEn: ALTA, plantilla: PLANTILLA,
     }, ACTOR);
 
     await expect(reservarMeses(db, { pagoId: 'p2', viviendaId: 'v1', meses: mes, actor: ACTOR, creadoEn: ALTA }))

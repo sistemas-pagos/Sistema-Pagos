@@ -30,6 +30,9 @@ export type MonthlyCollectionStatus = (typeof MONTHLY_COLLECTION_STATUSES)[numbe
  * casa 18B. Se guardan normalizados (ver `normalizeHomePart`) para que '18' y
  * '018' sean la misma casa y 'a' y 'A' el mismo bloque.
  */
+/** Las dos formas de pago del plan (docs/PLAN.md, seccion 1). */
+export type MetodoPago = 'TRANSFERENCIA' | 'EFECTIVO';
+
 export interface HomeRef {
   stage: string;
   block: string;

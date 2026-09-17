@@ -112,6 +112,12 @@ export async function applyPendingMigrations(
       throw error;
     }
 
+    // Una migracion que reconstruye una tabla tiene que apagar las claves
+    // foraneas para poder borrar la vieja, y eso es un ajuste de conexion: sin
+    // esto quedaria apagado para todo lo que venga despues, en la misma corrida
+    // y en el resto de la vida del cliente.
+    await client.execute('PRAGMA foreign_keys = ON');
+
     aplicadas.push(migration.nombre);
   }
 
