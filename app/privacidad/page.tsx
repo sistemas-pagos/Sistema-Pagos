@@ -8,20 +8,24 @@ import Link from 'next/link';
  * El contenido describe el servicio de produccion, no esta demo: que dato entra,
  * cual no se guarda y quien lo procesa, siguiendo las invariantes de
  * docs/PLAN.md seccion 3. Si una invariante cambia, este texto cambia con ella.
+ *
+ * El nombre del responsable tiene que ser el mismo que el del portafolio
+ * comercial de Meta: un revisor compara las dos cosas.
  */
 export const metadata: Metadata = {
-  title: 'Política de privacidad | Pagos residenciales por WhatsApp',
+  title: 'Política de privacidad | Tren de Aseo',
   description:
-    'Qué datos trata el sistema de pagos residenciales por WhatsApp, con qué finalidad, con quién se comparten y cuánto se conservan.',
+    'Qué datos trata el sistema de cobro de la cuota del tren de aseo por WhatsApp, con qué finalidad, con quién se comparten y cuánto se conservan.',
 };
 
+const RESPONSABLE = 'Tren de Aseo';
 const ACTUALIZADO = '17 de septiembre de 2026';
 
 export default function PrivacidadPage() {
   return (
     <main className="shell">
       <header className="topbar">
-        <div className="brand">JC HERNANDEZ · PRODUCT DEMO</div>
+        <div className="brand">{RESPONSABLE.toUpperCase()}</div>
         <Link className="admin-link" href="/">← Volver al inicio</Link>
       </header>
 
@@ -30,32 +34,33 @@ export default function PrivacidadPage() {
           <p className="eyebrow">Última actualización: {ACTUALIZADO}</p>
           <h1>Política de privacidad</h1>
           <p className="lead">
-            Este documento explica qué datos personales trata el sistema de cobro de cuotas de mantenimiento por WhatsApp,
+            Este documento explica qué datos personales trata el sistema de cobro de la cuota del tren de aseo por WhatsApp,
             para qué se usan, con quién se comparten y cuánto tiempo se conservan.
           </p>
         </div>
       </section>
 
       <div className="notice">
-        La página de inicio de este sitio es una <strong>demostración con datos inventados</strong>: ninguna vivienda, teléfono,
-        monto ni comprobante que aparece ahí corresponde a una persona real. Esta política se refiere al servicio en producción,
-        el que atiende los mensajes de WhatsApp de los residentes.
+        La página de inicio de este sitio es una <strong>demostración técnica con datos inventados</strong>: ninguna vivienda,
+        teléfono, monto ni comprobante que aparece ahí corresponde a una persona real. Esta política se refiere al servicio en
+        producción, el que atiende los mensajes de WhatsApp de los residentes.
       </div>
 
       <article className="legal">
         <h2>Quién trata los datos</h2>
         <p>
-          Los datos los trata la administración del residencial que opera el sistema, como responsable. El software es una
-          herramienta interna de esa administración; no se vende, no se cede y no se usa con fines publicitarios.
+          Los datos los trata <strong>{RESPONSABLE}</strong>, el servicio de recolección que cobra la cuota y opera este
+          sistema, como responsable. El software es una herramienta interna del servicio; no se vende, no se cede y no se usa
+          con fines publicitarios.
         </p>
 
         <h2>Qué datos se recogen</h2>
-        <p>Solo lo necesario para registrar y verificar el pago de la cuota mensual:</p>
+        <p>Solo lo necesario para registrar y verificar el pago de la cuota mensual del tren de aseo:</p>
         <ul>
           <li><strong>Número de teléfono de WhatsApp</strong> desde el que se envía el comprobante, para poder responder y enviar el recibo.</li>
           <li><strong>Identificación de la vivienda</strong>: etapa, bloque y casa. La indica el propio residente; el sistema nunca la deduce del número de teléfono ni del nombre del depositante.</li>
           <li><strong>Datos del comprobante bancario</strong>: fecha, hora, monto, referencia, banco, nombre del depositante, nombre del beneficiario y los últimos cuatro dígitos de la cuenta de destino.</li>
-          <li><strong>Datos del movimiento bancario</strong> del estado de cuenta del residencial, que es contra lo que se verifica cada transferencia.</li>
+          <li><strong>Datos del movimiento bancario</strong> del estado de cuenta del servicio, que es contra lo que se verifica cada transferencia.</li>
           <li>En los cobros en efectivo, el <strong>número de recibo de talonario</strong> y el cobrador que lo recibió.</li>
         </ul>
 
@@ -73,7 +78,7 @@ export default function PrivacidadPage() {
         <h2>Para qué se usan</h2>
         <p>
           Únicamente para la gestión del cobro: identificar a qué vivienda y a qué mes corresponde el pago, comprobarlo contra
-          el movimiento del banco, emitir el recibo, avisar al residente y mantener el estado de cuenta del residencial. No se
+          el movimiento del banco, emitir el recibo, avisar al residente y mantener el estado de cuenta del servicio. No se
           toman decisiones automatizadas con efecto legal: cuando algo no cuadra, el caso queda en revisión para que lo mire una
           persona.
         </p>
@@ -95,19 +100,18 @@ export default function PrivacidadPage() {
           <li><strong>Vercel</strong>: alojamiento del punto de entrada que recibe los mensajes.</li>
           <li><strong>Turso</strong>: base de datos donde se guarda el registro de pagos.</li>
           <li><strong>GitHub Actions</strong>: procesamiento de los comprobantes.</li>
-          <li><strong>Google (Sheets)</strong>: hojas de consulta para la administración.</li>
+          <li><strong>Google (Sheets)</strong>: hojas de consulta para quien administra el cobro.</li>
         </ul>
         <p>
-          También se comparten con quien la ley o la asamblea del residencial obligue, por ejemplo ante un requerimiento
-          judicial.
+          También se comparten con quien la ley obligue, por ejemplo ante un requerimiento judicial.
         </p>
 
         <h2>Cuánto se conservan</h2>
         <p>
-          El registro de pagos, recibos y cierres se conserva mientras la vivienda forme parte del residencial y después durante
-          el plazo que exija la normativa contable, porque es el respaldo de lo que cada casa pagó. El registro de correcciones
-          es inmutable por diseño: no se puede editar ni borrar, para que siempre se sepa quién cambió qué y por qué. Las
-          imágenes de los comprobantes, como se indica arriba, no se conservan en ningún momento.
+          El registro de pagos, recibos y cierres se conserva mientras la vivienda esté dentro del servicio y después durante el
+          plazo que exija la normativa contable, porque es el respaldo de lo que cada casa pagó. El registro de correcciones es
+          inmutable por diseño: no se puede editar ni borrar, para que siempre se sepa quién cambió qué y por qué. Las imágenes
+          de los comprobantes, como se indica arriba, no se conservan en ningún momento.
         </p>
 
         <h2>Seguridad</h2>
@@ -124,8 +128,8 @@ export default function PrivacidadPage() {
           para avisarle y recibir sus recibos por otro medio.
         </p>
         <p>
-          Las solicitudes se hacen ante la administración del residencial, por los mismos canales de siempre o escribiendo al
-          número de WhatsApp del sistema.
+          Las solicitudes se hacen ante {RESPONSABLE}, por los mismos canales de siempre o escribiendo al número de WhatsApp del
+          sistema.
         </p>
 
         <h2>Cambios</h2>
@@ -135,7 +139,7 @@ export default function PrivacidadPage() {
       </article>
 
       <footer className="footer">
-        <span>Sistema de pagos residenciales</span>
+        <span>{RESPONSABLE} · cobro de la cuota por WhatsApp</span>
         <Link className="admin-link" href="/">Inicio</Link>
       </footer>
     </main>
