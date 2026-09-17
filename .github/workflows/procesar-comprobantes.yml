@@ -52,4 +52,4 @@ jobs:
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           EXPECTED_BENEFICIARY: ${{ secrets.EXPECTED_BENEFICIARY }}
           EXPECTED_ACCOUNT_LAST4: ${{ secrets.EXPECTED_ACCOUNT_LAST4 }}
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/procesar-comprobantes.ts
+        run: npx tsx scripts/procesar-comprobantes.ts
