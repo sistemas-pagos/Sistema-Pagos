@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { DemoWorkbench } from './demo-workbench';
 import { DEMO_HOMES, DEMO_PAYMENTS, DEMO_PERIOD } from '@/src/demo/data';
 import { periodLabel } from '@/src/domain/periods';
@@ -103,6 +104,7 @@ export default async function HomePage() {
       <footer className="footer">
         <span>Next.js · TypeScript · WhatsApp Cloud API · Tesseract.js · Google Sheets API</span>
         <span>Sin credenciales, PII ni comprobantes reales en esta demo.</span>
+        <Link className="admin-link" href="/privacidad">Política de privacidad</Link>
       </footer>
     </main>
   );
