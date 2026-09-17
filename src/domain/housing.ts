@@ -1,9 +1,47 @@
 import type { HomeRef } from './types';
 
-// Etiquetas sueltas: admiten cualquier orden ("Casa 18, Bloque 4, Etapa 1").
-const STAGE = /\bE(?:TAPA)?\s*[:#.-]?\s*([A-Z0-9]{1,4})\b/i;
-const BLOCK = /\bB(?:LOQUE)?\s*[:#.-]?\s*([A-Z0-9]{1,4})\b/i;
-const HOUSE = /\bC(?:ASA)?\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i;
+/**
+ * Etiquetas sueltas, en cualquier orden: "Casa 18, Bloque 4, Etapa 1".
+ *
+ * La letra sola exige no venir seguida de otra letra. Sin eso, `C` enganchaba
+ * la de "Condominio" y se llevaba "ONDOM" como numero de casa, y `E(?:TAPA)?`
+ * enganchaba la de "4ta etapa" y devolvia la etapa "TAPA" con toda confianza.
+ * Ese fallo era peor que no leer nada: un comprobante legible se asignaba a una
+ * vivienda inexistente sin una sola advertencia.
+ *
+ * Se prueban en orden y gana la primera que acierta, de la forma mas explicita
+ * a la mas escueta.
+ */
+const STAGE: readonly RegExp[] = [
+  /\bETAPA\s*[:#.-]?\s*([A-Z0-9]{1,4})\b/i,
+  /\b(\d{1,2})\s*(?:ERA|ERO|RA|DA|TA|VA|MA|[ºo°])?\.?\s*ETAPA\b/i,
+  /\b(PRIMERA|PRIMER|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SEPTIMA|OCTAVA|NOVENA|DECIMA)\s+ETAPA\b/i,
+  /\bE(?![A-Z])\s*[:#.-]?\s*([A-Z0-9]{1,4})\b/i,
+];
+
+const BLOCK: readonly RegExp[] = [
+  /\bBLOQUES?\s*[:#.-]?\s*([A-Z0-9]{1,4})\b/i,
+  /\bB(?![A-Z])\s*[:#.-]?\s*([A-Z0-9]{1,4})\b/i,
+];
+
+const HOUSE: readonly RegExp[] = [
+  /\bCASAS?\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i,
+  /\bC(?![A-Z])\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i,
+];
+
+/** Los vecinos escriben la etapa en palabras tan seguido como en numero. */
+const ORDINALES: Record<string, string> = {
+  PRIMERA: '1', PRIMER: '1', SEGUNDA: '2', TERCERA: '3', CUARTA: '4', QUINTA: '5',
+  SEXTA: '6', SEPTIMA: '7', OCTAVA: '8', NOVENA: '9', DECIMA: '10',
+};
+
+function primerAcierto(texto: string, patrones: readonly RegExp[]): string | undefined {
+  for (const patron of patrones) {
+    const encontrado = texto.match(patron)?.[1];
+    if (encontrado) return ORDINALES[encontrado.toUpperCase()] ?? encontrado;
+  }
+  return undefined;
+}
 
 /**
  * Codigo compacto, en el orden Etapa-Bloque-Casa y sin necesidad de espacios:
@@ -12,7 +50,7 @@ const HOUSE = /\bC(?:ASA)?\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i;
  *
  * Es el formato que el sistema le pide al vecino, asi que es el que mas llega.
  */
-const COMPACT = /\bE(?:TAPA)?\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*B(?:LOQUE)?\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*C(?:ASA)?\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i;
+const COMPACT = /\b(?:ETAPA|E(?![A-Z]))\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*(?:BLOQUE|B)\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*(?:CASA|C)\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i;
 
 const VALID_PART = /^[A-Z0-9]{1,5}$/;
 
@@ -61,12 +99,12 @@ export function parseHomeReference(input: string | undefined | null): HomeRef | 
   const compact = normalized.match(COMPACT);
   if (compact) return build(compact[1], compact[2], compact[3]);
 
-  const stageMatch = normalized.match(STAGE);
-  const blockMatch = normalized.match(BLOCK);
-  const houseMatch = normalized.match(HOUSE);
-  if (!stageMatch || !blockMatch || !houseMatch) return undefined;
+  const stage = primerAcierto(normalized, STAGE);
+  const block = primerAcierto(normalized, BLOCK);
+  const house = primerAcierto(normalized, HOUSE);
+  if (!stage || !block || !house) return undefined;
 
-  return build(stageMatch[1], blockMatch[1], houseMatch[1]);
+  return build(stage, block, house);
 }
 
 export function sameHomeRef(a: HomeRef, b: HomeRef): boolean {
