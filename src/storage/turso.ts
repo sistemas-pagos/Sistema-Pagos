@@ -10,6 +10,7 @@
  * Fase 0 no conecta el webhook ni el procesador: eso es fase 1.
  */
 import type { Client, Transaction } from '@libsql/client';
+import type { MetodoPago } from '@/src/domain/types';
 
 type Executor = Pick<Client, 'execute'>;
 /** Un cliente abre transaccion propia; una transaccion en curso se reutiliza. */
@@ -17,7 +18,6 @@ export type Db = Client | Transaction;
 
 export type EstadoMensaje = 'RECIBIDO' | 'PROCESANDO' | 'PROCESADO' | 'IGNORADO' | 'RECHAZADO' | 'ERROR';
 export type EstadoVivienda = 'ACTIVA' | 'VACIA' | 'EXONERADA' | 'BAJA';
-export type MetodoPago = 'TRANSFERENCIA' | 'EFECTIVO';
 export type EstadoPago =
   | 'ESPERANDO_RESPUESTA' | 'PENDIENTE_VERIFICACION' | 'VERIFICADO' | 'EFECTIVO_COBRADO'
   | 'EN_REVISION' | 'NO_ENCONTRADO' | 'DUPLICADO' | 'RECHAZADO' | 'ANULADO';
@@ -75,6 +75,8 @@ export interface VerificacionInput {
   movimientoId: string;
   verificadoPor: string;
   verificadoEn: string;
+  /** Plantilla aprobada con la que sale el recibo (invariante 13). */
+  plantilla: string;
 }
 
 /**
@@ -83,11 +85,6 @@ export interface VerificacionInput {
  */
 export function codigoVivienda(etapa: string, bloque: string, casa: string): string {
   return `E${etapa}B${bloque}C${casa}`;
-}
-
-/** Formato de presentacion del numero de recibo. */
-export function formatoRecibo(numero: number): string {
-  return `REC-${String(numero).padStart(6, '0')}`;
 }
 
 function esTransaccion(db: Db): db is Transaction {
@@ -265,12 +262,21 @@ export async function liberarMeses(
  * `pagos.movimiento_id` es UNIQUE, asi que un mismo movimiento no puede
  * verificar dos pagos (invariante 3).
  */
+/**
+ * Verifica el pago contra un movimiento del banco y emite su recibo, todo en la
+ * misma transaccion (docs/PLAN.md, fase 4). Devuelve el numero del recibo.
+ *
+ * Que vaya junto no es comodidad: un pago verificado sin recibo es un vecino
+ * que pago y no tiene comprobante, y un recibo sin pago verificado es un
+ * comprobante de algo que nadie confirmo. Ninguno de los dos estados debe poder
+ * existir, ni siquiera un instante ni aunque el proceso se caiga en medio.
+ */
 export async function verificarPagoConMovimiento(
   db: Db,
   input: VerificacionInput,
   actor: string,
-): Promise<void> {
-  await enTransaccion(db, async (tx) => {
+): Promise<number> {
+  return enTransaccion(db, async (tx) => {
     await tx.execute({
       sql: `UPDATE pagos
             SET estado = 'VERIFICADO', movimiento_id = ?, verificado_por = ?, verificado_en = ?, actualizado_en = ?
@@ -288,30 +294,203 @@ export async function verificarPagoConMovimiento(
       despues: { estado: 'VERIFICADO' },
       actor,
     }, input.verificadoEn);
+
+    return emitirRecibo(tx, {
+      pagoId: input.pagoId,
+      emitidoEn: input.verificadoEn,
+      actor,
+      plantilla: input.plantilla,
+    });
   });
 }
 
 /**
- * Emite el recibo de un pago y devuelve su numero. La secuencia es global y
- * nunca se reutiliza, y `recibos.pago_id` es UNIQUE: un recibo por pago
- * (invariante 10).
+ * Emite el recibo de un pago, lo encola para enviar y devuelve su numero.
+ *
+ * La secuencia es global y nunca se reutiliza (invariante 10): `numero` es
+ * AUTOINCREMENT, que a diferencia de un rowid normal no rellena huecos dejadas
+ * por filas borradas. El indice parcial `ux_recibo_activo` impide dos recibos
+ * EMITIDOS para el mismo pago, y a la vez deja convivir los anulados.
+ *
+ * El envio se encola solo si el pago trae telefono. Un pago sin telefono queda
+ * con su recibo emitido y sin envio, que es justo lo que la vista de recibos no
+ * entregados tiene que mostrar; inventarle un destinatario seria peor.
  */
 export async function emitirRecibo(
   db: Db,
-  input: { pagoId: string; emitidoEn: string; actor: string },
+  input: { pagoId: string; emitidoEn: string; actor: string; plantilla: string; reemplazaA?: number },
 ): Promise<number> {
   return enTransaccion(db, async (tx) => {
     const resultado = await tx.execute({
-      sql: "INSERT INTO recibos (pago_id, estado, emitido_en) VALUES (?, 'EMITIDO', ?)",
-      args: [input.pagoId, input.emitidoEn],
+      sql: 'INSERT INTO recibos (pago_id, estado, reemplaza_a, emitido_en) VALUES (?, \'EMITIDO\', ?, ?)',
+      args: [input.pagoId, input.reemplazaA ?? null, input.emitidoEn],
     });
 
     const numero = Number(resultado.lastInsertRowid);
     await registrarEvento(tx, {
-      entidad: 'recibos', entidadId: String(numero), accion: 'EMITIR', despues: { pagoId: input.pagoId }, actor: input.actor,
+      entidad: 'recibos',
+      entidadId: String(numero),
+      accion: 'EMITIR',
+      despues: { pagoId: input.pagoId, reemplazaA: input.reemplazaA ?? null },
+      actor: input.actor,
     }, input.emitidoEn);
 
+    const { rows } = await tx.execute({
+      sql: 'SELECT telefono_contacto FROM pagos WHERE id = ?',
+      args: [input.pagoId],
+    });
+    const telefono = rows[0]?.telefono_contacto;
+    if (typeof telefono === 'string' && telefono !== '') {
+      await tx.execute({
+        sql: `INSERT INTO envios (id, recibo_numero, telefono, plantilla, estado, actualizado_en)
+              VALUES (?, ?, ?, ?, 'PENDIENTE', ?)`,
+        args: [`env-${numero}`, numero, telefono, input.plantilla, input.emitidoEn],
+      });
+    }
+
     return numero;
+  });
+}
+
+/**
+ * Anula un recibo con motivo y emite otro para el mismo pago, encadenado con
+ * `reemplaza_a`. Devuelve el numero nuevo.
+ *
+ * El recibo viejo no se edita ni se borra (invariante 10): queda ANULADO, con
+ * su motivo y su numero, para que la numeracion siga cuadrando cuando alguien
+ * revise el talonario y encuentre un salto.
+ */
+export async function reemitirRecibo(
+  db: Db,
+  input: { numero: number; motivo: string; actor: string; en: string; plantilla: string },
+): Promise<number> {
+  return enTransaccion(db, async (tx) => {
+    const { rows } = await tx.execute({
+      sql: "SELECT pago_id, estado FROM recibos WHERE numero = ?",
+      args: [input.numero],
+    });
+    const recibo = rows[0];
+    if (!recibo) throw new Error('recibo_inexistente');
+    if (recibo.estado !== 'EMITIDO') throw new Error('recibo_no_emitido');
+
+    await tx.execute({
+      sql: "UPDATE recibos SET estado = 'ANULADO', motivo_anulacion = ? WHERE numero = ?",
+      args: [input.motivo, input.numero],
+    });
+    // Un envio pendiente del recibo anulado no debe salir: llevaria un numero
+    // que ya no vale.
+    await tx.execute({
+      sql: "UPDATE envios SET estado = 'FALLIDO', error = 'recibo_anulado', actualizado_en = ? WHERE recibo_numero = ? AND estado = 'PENDIENTE'",
+      args: [input.en, input.numero],
+    });
+    await registrarEvento(tx, {
+      entidad: 'recibos',
+      entidadId: String(input.numero),
+      accion: 'ANULAR',
+      antes: { estado: 'EMITIDO' },
+      despues: { estado: 'ANULADO' },
+      motivo: input.motivo,
+      actor: input.actor,
+    }, input.en);
+
+    return emitirRecibo(tx, {
+      pagoId: String(recibo.pago_id),
+      emitidoEn: input.en,
+      actor: input.actor,
+      plantilla: input.plantilla,
+      reemplazaA: input.numero,
+    });
+  });
+}
+
+export interface EnvioPendiente {
+  id: string;
+  reciboNumero: number;
+  telefono: string;
+  plantilla: string;
+  intentos: number;
+  vivienda: string;
+  periodos: string[];
+  montoCentavos: number;
+  metodo: MetodoPago;
+  referencia?: string;
+  fechaPago?: string;
+  verificadoEn: string;
+}
+
+/**
+ * Los envios que faltan mandar, con todo lo que el mensaje necesita.
+ *
+ * Solo salen los recibos EMITIDOS: si el recibo se anulo mientras el envio
+ * esperaba, el mensaje ya no corresponde. Y solo los que no agotaron intentos,
+ * para que un telefono que no existe no se reintente para siempre.
+ */
+export async function enviosPendientes(
+  db: Db,
+  maxIntentos = 5,
+  limite = 50,
+): Promise<EnvioPendiente[]> {
+  const { rows } = await db.execute({
+    sql: `SELECT e.id, e.recibo_numero, e.telefono, e.plantilla, e.intentos,
+                 v.codigo AS vivienda,
+                 p.monto_centavos, p.metodo, p.referencia, p.fecha_pago, p.verificado_en,
+                 (SELECT group_concat(pm.periodo, ',')
+                    FROM (SELECT periodo FROM pago_meses WHERE pago_id = p.id ORDER BY periodo) pm) AS periodos
+            FROM envios e
+            JOIN recibos r ON r.numero = e.recibo_numero
+            JOIN pagos p ON p.id = r.pago_id
+            LEFT JOIN viviendas v ON v.id = p.vivienda_id
+           WHERE e.estado = 'PENDIENTE' AND r.estado = 'EMITIDO' AND e.intentos < ?
+           ORDER BY e.recibo_numero
+           LIMIT ?`,
+    args: [maxIntentos, limite],
+  });
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    reciboNumero: Number(row.recibo_numero),
+    telefono: String(row.telefono),
+    plantilla: String(row.plantilla),
+    intentos: Number(row.intentos),
+    vivienda: row.vivienda == null ? '—' : String(row.vivienda),
+    periodos: row.periodos == null ? [] : String(row.periodos).split(','),
+    montoCentavos: Number(row.monto_centavos),
+    metodo: String(row.metodo) as MetodoPago,
+    referencia: row.referencia == null ? undefined : String(row.referencia),
+    fechaPago: row.fecha_pago == null ? undefined : String(row.fecha_pago),
+    verificadoEn: row.verificado_en == null ? '' : String(row.verificado_en),
+  }));
+}
+
+export async function marcarEnvioEnviado(
+  db: Db,
+  input: { id: string; waMessageId?: string; en: string },
+): Promise<void> {
+  await db.execute({
+    sql: `UPDATE envios
+          SET estado = 'ENVIADO', intentos = intentos + 1, wa_message_id = ?, error = NULL, actualizado_en = ?
+          WHERE id = ?`,
+    args: [input.waMessageId ?? null, input.en, input.id],
+  });
+}
+
+/**
+ * Suma un intento y deja el envio PENDIENTE para la proxima corrida. Se marca
+ * FALLIDO solo al agotar los intentos: un error de red no debe costar el recibo.
+ */
+export async function marcarEnvioFallido(
+  db: Db,
+  input: { id: string; error: string; en: string; maxIntentos?: number },
+): Promise<void> {
+  const maxIntentos = input.maxIntentos ?? 5;
+  await db.execute({
+    sql: `UPDATE envios
+          SET intentos = intentos + 1,
+              error = ?,
+              estado = CASE WHEN intentos + 1 >= ? THEN 'FALLIDO' ELSE 'PENDIENTE' END,
+              actualizado_en = ?
+          WHERE id = ?`,
+    args: [input.error.slice(0, 120), maxIntentos, input.en, input.id],
   });
 }
 

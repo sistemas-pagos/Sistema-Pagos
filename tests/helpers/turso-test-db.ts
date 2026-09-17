@@ -14,6 +14,8 @@ export async function nuevaBaseDePrueba(): Promise<Client> {
 }
 
 export const ACTOR = 'prueba';
+/** Nombre de la plantilla aprobada; en las pruebas solo viaja como texto. */
+export const PLANTILLA = 'recibo_pago';
 export const CUOTA_CENTAVOS = 15_000;
 
 /** Un usuario, una importacion de CSV y dos movimientos de banco para las pruebas. */

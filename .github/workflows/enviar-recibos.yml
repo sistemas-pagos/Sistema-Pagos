@@ -1,0 +1,56 @@
+name: Enviar recibos
+
+# Corre al terminar los procesos que emiten recibos y por cron de respaldo
+# (docs/PLAN.md, seccion 5). El cron importa mas aqui que en otros workflows:
+# un envio que falla por red queda PENDIENTE y solo lo reintenta una corrida
+# posterior, asi que sin cron un recibo podria quedarse en la cola para siempre.
+on:
+  workflow_run:
+    workflows: ['Procesar comprobantes']
+    types: [completed]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Una sola corrida a la vez. Dos en paralelo tomarian el mismo envio pendiente
+# y el vecino recibiria el recibo dos veces.
+concurrency:
+  group: enviar-recibos
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    environment: pagos-produccion
+    timeout-minutes: 10
+    env:
+      APP_MODE: production
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # El script registra contadores y numeros de recibo. El numero de recibo no
+      # identifica a nadie por si solo: ni telefono, ni E/B/C, ni monto, ni
+      # referencia salen en el log (invariante 12).
+      - name: Vaciar la cola de envios
+        env:
+          PAGOS_TURSO_URL: ${{ secrets.PAGOS_TURSO_URL }}
+          PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_TEMPLATE_RECIBO: ${{ vars.WHATSAPP_TEMPLATE_RECIBO }}
+          WHATSAPP_TEMPLATE_IDIOMA: ${{ vars.WHATSAPP_TEMPLATE_IDIOMA }}
+        run: npx tsx scripts/enviar-recibos.ts
