@@ -39,4 +39,4 @@ jobs:
         env:
           PAGOS_TURSO_URL: ${{ secrets.PAGOS_TURSO_URL }}
           PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/migrate.ts
+        run: npx tsx scripts/migrate.ts

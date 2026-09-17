@@ -59,6 +59,11 @@ banking data, credentials, service-account files or secrets.
 
 Run the project checks from the repository root before pushing: `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. CI runs the same four steps on every pull request and on `main`.
 
+The scripts under `scripts/` are run in Actions with `npx tsx`, not with bare `node`: they
+import through the `@/` alias and without file extensions, which Node's loader does not
+resolve. `tests/scripts-arrancan.test.ts` starts each one to keep the four checks above from
+passing while a workflow is broken.
+
 Database migrations live in `migrations/NNN_*.sql` and are applied only by the manual
 `migraciones` workflow. An applied migration is immutable: to change the schema, add a
 new file.
