@@ -65,6 +65,13 @@ const CONFIANZA_MINIMA_OCR = 0.55;
  */
 const MAX_INTENTOS_VIVIENDA = 3;
 
+/** Motivos de revision que desaparecen en cuanto el vecino dice de que casa es. */
+const RESUELTOS_POR_LA_VIVIENDA = new Set([
+  'receipt_home_not_in_master',
+  'home_reply_timeout',
+  'home_reply_attempts_exhausted',
+]);
+
 /**
  * La foto no se puede leer.
  *
@@ -374,20 +381,47 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
   }
 }
 
+/**
+ * El ultimo pago de este telefono que todavia no sabe de que casa es.
+ *
+ * El contexto vence a los 30 minutos, pero el pago sigue sin vivienda mucho
+ * despues. Sin esto, el vecino que contesta a las dos horas —con la casa
+ * correcta— recibia instrucciones genericas y su respuesta se tiraba. Contesto
+ * bien y no servia de nada.
+ *
+ * Vencer el contexto significa **dejar de preguntar**, no dejar de escuchar.
+ */
+async function pagoSinVivienda(store: PaymentStore, phone: string): Promise<PaymentRecord | undefined> {
+  const payments = await store.listPayments();
+  return payments
+    .filter((payment) =>
+      payment.phone === phone
+      && payment.stage == null
+      && (payment.status === 'ESPERANDO_RESPUESTA' || payment.status === 'EN_REVISION'))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+
 export async function processHomeReply(messageId: string, phone: string, body: string, deps: ProcessorDependencies): Promise<ProcessOutcome> {
   const { store } = deps;
   if (await store.hasProcessedMessage(messageId)) return { action: 'silent', reason: 'technical_retry' };
   const now = deps.now?.() ?? new Date();
   const at = now.toISOString();
   const pending = await store.getPendingByPhone(phone);
+  // Sin contexto abierto todavia puede haber un pago esperando su vivienda.
+  const tardio = pending ? undefined : await pagoSinVivienda(store, phone);
 
-  if (!pending) {
+  if (!pending && !tardio) {
     await markMessage(store, messageId, 'text', 'ignored', at);
     return { action: 'silent', reason: 'no_pending_receipt' };
   }
 
   const home = parseHomeReference(body);
   if (!home) {
+    // Sin contexto no hay intentos que contar: se responde y se deja como esta.
+    if (!pending) {
+      await markMessage(store, messageId, 'text', 'processed', at);
+      return { action: 'reply', reply: viviendaNoEntendidaReply(1), reason: 'invalid_home_reply' };
+    }
     return respuestaQueNoSirvio(store, pending, messageId, at, 'invalid_home_reply', viviendaNoEntendidaReply);
   }
 
@@ -399,10 +433,14 @@ export async function processHomeReply(messageId: string, phone: string, body: s
     && candidate.house === home.house,
   );
   if (!known) {
+    if (!pending) {
+      await markMessage(store, messageId, 'text', 'processed', at);
+      return { action: 'reply', reply: viviendaDesconocidaReply(1), reason: 'home_not_found' };
+    }
     return respuestaQueNoSirvio(store, pending, messageId, at, 'home_not_found', viviendaDesconocidaReply);
   }
 
-  const payment = await store.getPayment(pending.paymentId);
+  const payment = pending ? await store.getPayment(pending.paymentId) : tardio;
   if (!payment) {
     await store.clearPending(phone);
     await markMessage(store, messageId, 'text', 'rejected', at);
@@ -412,7 +450,9 @@ export async function processHomeReply(messageId: string, phone: string, body: s
   const allPayments = await store.listPayments();
   // `known` es la ficha del padron: trae la fecha de alta de la vivienda.
   const period = assignServicePeriod(known, payment.transactionDate, allPayments, now, payment.id);
-  const clearedReason = payment.reviewReason === 'receipt_home_not_in_master' ? undefined : payment.reviewReason;
+  // Decir de que casa es resuelve estos tres motivos y ninguno mas: si el pago
+  // estaba en revision por el monto o por el beneficiario, sigue estandolo.
+  const clearedReason = RESUELTOS_POR_LA_VIVIENDA.has(payment.reviewReason ?? '') ? undefined : payment.reviewReason;
   let updated: PaymentRecord = {
     ...payment,
     stage: home.stage,

@@ -12,11 +12,13 @@
  *
  * No imprime telefonos, E/B/C, montos ni referencias (invariante 12).
  */
+import type { Client } from '@libsql/client';
 import { env } from '../src/config/env.ts';
 import { createReceiptRecognizer, type ReceiptRecognizer } from '../src/ocr/tesseract.ts';
 import { maskIdentifier, safeLog } from '../src/security/logging.ts';
 import { ignoreWhatsAppMessage, processHomeReply, processReceiptMessage } from '../src/services/payment-processor.ts';
 import { getPaymentStore } from '../src/storage/index.ts';
+import { contextosPorRecordar, marcarRecordado } from '../src/storage/mantenimiento.ts';
 import { createTursoClient, tursoConfigFromEnv } from '../src/storage/turso-client.ts';
 import { cerrarMensaje, mensajesPendientes, tomarMensaje, type MensajePendiente } from '../src/storage/turso.ts';
 import { downloadWhatsAppMedia, sendWhatsAppText } from '../src/whatsapp/client.ts';
@@ -86,15 +88,48 @@ async function procesarTexto(mensaje: MensajePendiente, store: Store) {
   return resultado;
 }
 
-async function responder(telefono: string, texto: string, messageId: string): Promise<void> {
+async function responder(telefono: string, texto: string, messageId: string): Promise<boolean> {
   try {
     await sendWhatsAppText(telefono, texto);
+    return true;
   } catch (error) {
     safeLog('error', 'whatsapp_reply_send_failed', {
       messageId: maskIdentifier(messageId),
       reason: error instanceof Error ? error.message.slice(0, 120) : 'unknown',
     });
+    return false;
   }
+}
+
+const RECORDATORIO_VIVIENDA = [
+  'Todavía nos falta saber de qué casa es tu pago.',
+  'Respondé con tu Etapa, Bloque y Casa, por ejemplo E1 B4 C18.',
+].join(' ');
+
+/**
+ * Un solo recordatorio a quien no contesto de que casa es su pago.
+ *
+ * Va antes de procesar los mensajes y no despues: en una corrida sin mensajes
+ * nuevos —que es la mayoria— el worker sale temprano, y ahi es justamente
+ * cuando hace falta recordar.
+ *
+ * Sigue dentro de la ventana de 24 horas de WhatsApp, asi que es texto libre y
+ * no necesita plantilla aprobada. Uno solo: la marca en la base impide que las
+ * corridas siguientes lo repitan.
+ */
+async function recordarVivienda(db: Client): Promise<number> {
+  const ahora = new Date().toISOString();
+  const pendientes = await contextosPorRecordar(db, ahora);
+  let enviados = 0;
+
+  for (const contexto of pendientes) {
+    if (await responder(contexto.telefono, RECORDATORIO_VIVIENDA, contexto.id)) {
+      await marcarRecordado(db, contexto.id, ahora);
+      enviados += 1;
+    }
+  }
+
+  return enviados;
 }
 
 async function main(): Promise<void> {
@@ -102,6 +137,9 @@ async function main(): Promise<void> {
   let recognizer: ReceiptRecognizer | undefined;
 
   try {
+    const recordados = await recordarVivienda(db);
+    if (recordados > 0) safeLog('info', 'recordatorio_vivienda_enviado', { cantidad: recordados });
+
     const pendientes = await mensajesPendientes(db);
     if (pendientes.length === 0) {
       safeLog('info', 'procesar_comprobantes_sin_pendientes');
