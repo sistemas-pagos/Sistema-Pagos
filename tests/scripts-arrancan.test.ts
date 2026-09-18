@@ -23,7 +23,7 @@ const RUNNER = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
 
 const SCRIPTS = [
   'scripts/migrate.ts', 'scripts/procesar-comprobantes.ts', 'scripts/enviar-recibos.ts',
-  'scripts/alta-usuario.ts',
+  'scripts/sincronizar-usuario.ts',
 ];
 
 /** Sin las credenciales, para que el script se detenga en la primera validacion. */

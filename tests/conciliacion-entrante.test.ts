@@ -2,7 +2,7 @@ import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTOR, nuevaBaseDePrueba } from './helpers/turso-test-db';
 import { decidirConciliacion } from '@/src/services/conciliacion-entrante';
-import { type Usuario, crearUsuario, puedeConciliar, usuarioPorTelefono } from '@/src/storage/usuarios';
+import { type Usuario, crearUsuario, puedeConciliar, sincronizarUsuario, usuarioPorTelefono } from '@/src/storage/usuarios';
 
 /**
  * El extracto del banco llega por WhatsApp desde un numero autorizado, y de ese
@@ -63,6 +63,72 @@ describe('quien esta autorizado', () => {
     const { rows } = await db.execute("SELECT despues_json FROM eventos WHERE entidad = 'usuarios'");
     expect(String(rows[0].despues_json)).not.toContain('9000');
     expect(JSON.parse(String(rows[0].despues_json))).toEqual({ rol: 'TESORERO', activo: true });
+  });
+});
+
+describe('sincronizar el autorizado con el secreto', () => {
+  let db: Client;
+  beforeEach(async () => { db = await nuevaBaseDePrueba(); });
+  afterEach(() => { db.close(); });
+
+  const tesorero = { id: 'u-tesorero', nombre: 'u-tesorero', rol: 'TESORERO' as const };
+
+  it('crea la fila la primera vez', async () => {
+    expect(await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA)).toBe('creado');
+    expect(await usuarioPorTelefono(db, TELEFONO_TESORERO)).toMatchObject({ id: 'u-tesorero' });
+  });
+
+  /** Correrlo dos veces con el mismo secreto no puede cambiar nada. */
+  it('no toca nada si ya esta asi', async () => {
+    await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA);
+
+    expect(await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA)).toBe('sin_cambios');
+  });
+
+  /**
+   * Cambiar de tesorero es cambiar el secreto y volver a correr esto. Si en vez
+   * de actualizar se creara una fila nueva quedarian **dos numeros
+   * autorizados** a la vez, que es justo lo contrario de lo que se quiere.
+   */
+  it('cambia el telefono sin dejar autorizado al anterior', async () => {
+    await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA);
+
+    expect(await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_CUALQUIERA }, ACTOR, AHORA)).toBe('actualizado');
+
+    expect(await usuarioPorTelefono(db, TELEFONO_CUALQUIERA)).toMatchObject({ id: 'u-tesorero' });
+    expect(await usuarioPorTelefono(db, TELEFONO_TESORERO)).toBeUndefined();
+    const { rows } = await db.execute('SELECT count(*) AS c FROM usuarios');
+    expect(Number(rows[0].c)).toBe(1);
+  });
+
+  /** Correr la sincronizacion es decir "este es el autorizado". */
+  it('reactiva a quien estaba dado de baja', async () => {
+    await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA);
+    await db.execute("UPDATE usuarios SET activo = 0 WHERE id = 'u-tesorero'");
+
+    expect(await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA)).toBe('actualizado');
+    expect(await usuarioPorTelefono(db, TELEFONO_TESORERO)).toBeDefined();
+  });
+
+  /**
+   * Elegir solos cual gana seria quitarle el acceso a alguien sin que nadie lo
+   * haya pedido.
+   */
+  it('se niega si ese telefono es de otra persona', async () => {
+    await crearUsuario(db, { id: 'u-admin', nombre: 'Admin', rol: 'ADMIN', telefono: TELEFONO_TESORERO }, ACTOR, AHORA);
+
+    await expect(sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA))
+      .rejects.toThrow('u-admin');
+  });
+
+  it('el evento dice que el telefono cambio, pero no cual es', async () => {
+    await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_TESORERO }, ACTOR, AHORA);
+    await sincronizarUsuario(db, { ...tesorero, telefono: TELEFONO_CUALQUIERA }, ACTOR, AHORA);
+
+    const { rows } = await db.execute("SELECT despues_json FROM eventos WHERE accion = 'ACTUALIZAR'");
+    const despues = JSON.parse(String(rows[0].despues_json));
+    expect(despues).toMatchObject({ telefonoCambio: true, rol: 'TESORERO', activo: true });
+    expect(String(rows[0].despues_json)).not.toContain('9000');
   });
 });
 
