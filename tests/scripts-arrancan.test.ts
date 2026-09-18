@@ -21,7 +21,10 @@ const ejecutar = promisify(execFile);
  */
 const RUNNER = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
 
-const SCRIPTS = ['scripts/migrate.ts', 'scripts/procesar-comprobantes.ts', 'scripts/enviar-recibos.ts'];
+const SCRIPTS = [
+  'scripts/migrate.ts', 'scripts/procesar-comprobantes.ts', 'scripts/enviar-recibos.ts',
+  'scripts/alta-usuario.ts',
+];
 
 /** Sin las credenciales, para que el script se detenga en la primera validacion. */
 const ENTORNO_SIN_CREDENCIALES = {
@@ -51,6 +54,7 @@ describe('los scripts de Actions arrancan', () => {
       fs.readFile('.github/workflows/migraciones.yml', 'utf8'),
       fs.readFile('.github/workflows/procesar-comprobantes.yml', 'utf8'),
       fs.readFile('.github/workflows/enviar-recibos.yml', 'utf8'),
+      fs.readFile('.github/workflows/usuarios.yml', 'utf8'),
     ]);
 
     // Si un workflow vuelve a `node script.ts`, la prueba deja de representar

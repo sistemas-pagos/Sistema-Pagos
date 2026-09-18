@@ -1,0 +1,49 @@
+name: Usuarios
+
+# Solo manual. Da de alta a quien puede mandar el extracto del banco y
+# confirmarlo, asi que no corre solo ni por cron.
+#
+# No tiene inputs a proposito: el nombre y el telefono son datos personales y
+# los valores de un workflow_dispatch quedan a la vista en la pagina de la
+# corrida, en un repositorio publico. Van como secretos del Environment y se
+# cambian ahi antes de cada alta.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usuarios
+  cancel-in-progress: false
+
+jobs:
+  alta:
+    runs-on: ubuntu-latest
+    environment: pagos-produccion
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # El script solo imprime el rol y si hubo alta. Nunca el nombre ni el telefono.
+      - name: Dar de alta
+        env:
+          PAGOS_TURSO_URL: ${{ secrets.PAGOS_TURSO_URL }}
+          PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
+          PAGOS_USUARIO_ID: ${{ secrets.PAGOS_USUARIO_ID }}
+          PAGOS_USUARIO_NOMBRE: ${{ secrets.PAGOS_USUARIO_NOMBRE }}
+          PAGOS_USUARIO_ROL: ${{ secrets.PAGOS_USUARIO_ROL }}
+          PAGOS_USUARIO_TELEFONO: ${{ secrets.PAGOS_USUARIO_TELEFONO }}
+        run: npx tsx scripts/alta-usuario.ts
