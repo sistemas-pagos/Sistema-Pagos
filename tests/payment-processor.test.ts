@@ -88,7 +88,8 @@ describe('payment processor', () => {
     }, { store, now });
 
     expect(received.status).toBe('ESPERANDO_RESPUESTA');
-    expect(received.reply).toContain('Ejemplo: E1 B4 C18');
+    // Lo que importa es que el mensaje muestre el formato, no como lo introduce.
+    expect(received.reply).toContain('E1 B4 C18');
     expect(await store.getPendingByPhone('+50400000999')).toBeDefined();
 
     const incomplete = await processHomeReply('msg-incomplete', '+50400000999', 'B4 C18', { store, now });

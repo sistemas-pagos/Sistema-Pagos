@@ -105,6 +105,11 @@ export interface PendingConversation {
   paymentId: string;
   createdAt: string;
   expiresAt: string;
+  /**
+   * Respuestas que no sirvieron. Al agotarse, el pago pasa a revision humana en
+   * vez de seguir pidiendo lo mismo (docs/PLAN.md, fase 1).
+   */
+  attempts: number;
 }
 
 export interface ProcessedMessage {
