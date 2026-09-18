@@ -33,11 +33,12 @@ function usablePayments(payments: readonly PaymentRecord[], home: HomeRecord, pe
 }
 
 function classify(payments: readonly PaymentRecord[]): HousePeriodCell['state'] {
-  if (payments.some((payment) => payment.status === 'VERIFICADO')) return 'VERIFICADO';
+  // El efectivo cobrado cuenta como pagado aunque todavia no se haya cuadrado
+  // la caja: la plata ya salio de la casa (invariante 2).
+  if (payments.some((payment) => payment.status === 'VERIFICADO' || payment.status === 'EFECTIVO_COBRADO')) return 'VERIFICADO';
   if (payments.some((payment) => payment.status === 'PENDIENTE_VERIFICACION')) return 'RECIBIDO';
   if (payments.some((payment) => payment.status === 'EN_REVISION')) return 'EN_REVISION';
   if (payments.some((payment) => payment.status === 'NO_ENCONTRADO')) return 'NO_ENCONTRADO';
-  if (payments.some((payment) => ['COMPROBANTE_RECIBIDO', 'PROCESANDO', 'EXTRAIDO'].includes(payment.status))) return 'RECIBIDO';
   return 'PENDIENTE';
 }
 
