@@ -89,7 +89,7 @@ export function textoExtracto(opciones: OpcionesExtracto = {}): string {
   const saldoInicial = opciones.saldoInicial ?? SALDO_INICIAL_POR_DEFECTO;
   const lineas = [
     'Número de Clientes, Nombre, Producto, Moneda, Saldo Inicial, Saldo en Libros, Retenidos y Diferidos, Saldo Disponible, Fecha, STBGAV, STBUNC, Mensaje1, Mensaje2, Mensaje3, Mensaje4, Mensaje5, Mensaje6 ',
-    `1234567, ${opciones.titular ?? 'TITULAR DE PRUEBA'}, ${opciones.cuenta ?? '790582920'}, HNL, ${saldoInicial}, 1150.00, 0.00, 1150.00, 16/09/2026, 1150.00, 0.00, , , , , ,  `,
+    `1234567, ${opciones.titular ?? 'TITULAR DE PRUEBA'}, ${opciones.cuenta ?? '900112233'}, HNL, ${saldoInicial}, 1150.00, 0.00, 1150.00, 16/09/2026, 1150.00, 0.00, , , , , ,  `,
     '',
     'Detalle de Estado Bancario',
   ];

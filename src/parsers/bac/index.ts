@@ -166,7 +166,7 @@ function normalizeReference(value: string | undefined): string | undefined {
  * comprobar a que cuenta entro el dinero (invariante 4), que es lo unico que
  * separa un deposito nuestro de uno a la cuenta de otra persona:
  *
- *   1. Dentro de la frase: "a la cuenta bancaria Nº 790582920 a nombre de X".
+ *   1. Dentro de la frase: "a la cuenta bancaria Nº 900112233 a nombre de X".
  *   2. Bajo "Cuenta destino", con el nombre y el numero en lineas seguidas.
  *   3. En el comprobante de agente: "Cliente:" y "Numero de Cuenta:" aparte.
  */

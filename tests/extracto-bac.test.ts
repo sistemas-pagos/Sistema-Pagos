@@ -19,7 +19,7 @@ describe('las tres secciones del archivo', () => {
   it('lee la cuenta de la cabecera', () => {
     const { cuenta } = leerExtractoBac(extractoBac());
 
-    expect(cuenta.cuenta).toBe('790582920');
+    expect(cuenta.cuenta).toBe('900112233');
     expect(cuenta.titular).toBe('TITULAR DE PRUEBA');
     expect(cuenta.moneda).toBe('HNL');
     expect(cuenta.saldoInicialCentavos).toBe(100000);
@@ -227,7 +227,7 @@ describe('la cuenta del extracto', () => {
    * entraron a la cuenta de cobro. Es la invariante 4 del lado del banco.
    */
   it('deja comprobar que el extracto es el de la cuenta de cobro', () => {
-    expect(ultimos4DeLaCuenta(leerExtractoBac(extractoBac()))).toBe('2920');
+    expect(ultimos4DeLaCuenta(leerExtractoBac(extractoBac()))).toBe('2233');
     expect(ultimos4DeLaCuenta(leerExtractoBac(extractoBac({ cuenta: '745374361' })))).toBe('4361');
   });
 });
