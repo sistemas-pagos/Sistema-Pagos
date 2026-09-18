@@ -3,9 +3,12 @@ import type { PaymentRecord } from '@/src/domain/types';
 import {
   construirNoEncontrado,
   construirRechazo,
+  estadoTrasCambiarVivienda,
   puedeCambiarDeVivienda,
-  puedeCerrarse,
+  puedeMarcarseSinRespaldo,
+  puedeRechazarse,
 } from '@/src/services/acciones-panel';
+import { LIBERAN_EL_MES_PARA_PRUEBAS } from '@/src/services/period-assignment';
 
 const AHORA = new Date('2026-09-16T12:00:00.000Z');
 
@@ -70,11 +73,14 @@ describe('H9: un pago en revision tiene salida', () => {
   });
 
   /**
-   * `RECHAZADO` libera el mes (invariante 5), que es lo que hace falta para que
-   * la casa pueda volver a pagarlo.
+   * Lo que importa no es que diga RECHAZADO: es que ese estado **libere el
+   * mes** (invariante 5), para que la casa pueda volver a pagarlo. Se comprueba
+   * contra la lista que usa la asignacion de meses, no contra el texto.
    */
   it('deja el pago en un estado que libera el mes', () => {
-    expect(construirRechazo(montoRaro(), 'motivo', AHORA).status).toBe('RECHAZADO');
+    const rechazado = construirRechazo(montoRaro(), 'motivo', AHORA);
+
+    expect(LIBERAN_EL_MES_PARA_PRUEBAS.has(rechazado.status)).toBe(true);
   });
 
   /**
@@ -91,7 +97,7 @@ describe('H9: un pago en revision tiene salida', () => {
 
   /** Un pago verificado no se rechaza por aca: se anula, que deja otro rastro. */
   it('no deja cerrar un pago ya verificado', () => {
-    expect(puedeCerrarse(pago({ status: 'VERIFICADO' }))).toBe(false);
+    expect(puedeRechazarse(pago({ status: 'VERIFICADO' }))).toBe(false);
     expect(() => construirRechazo(pago({ status: 'VERIFICADO' }), 'motivo', AHORA))
       .toThrow('payment_not_closable');
   });
@@ -99,5 +105,39 @@ describe('H9: un pago en revision tiene salida', () => {
   it('no deja cerrar dos veces lo que ya se cerro', () => {
     expect(() => construirNoEncontrado(pago({ status: 'RECHAZADO' }), AHORA)).toThrow('payment_not_closable');
     expect(() => construirRechazo(pago({ status: 'DUPLICADO' }), 'motivo', AHORA)).toThrow('payment_not_closable');
+  });
+
+  /**
+   * Un pago que todavia espera la vivienda se puede rechazar, pero no se puede
+   * decir que el banco no lo respalda: nunca se busco, porque no se sabe de que
+   * casa es. Tenerlos en la misma lista hacia que la accion tirara por una
+   * transicion invalida y el pedido terminara en 500 — justo lo que la
+   * invariante 14 prohibe.
+   */
+  it('no deja marcar sin respaldo lo que todavia no dice de que casa es', () => {
+    expect(puedeMarcarseSinRespaldo(pago({ status: 'ESPERANDO_RESPUESTA' }))).toBe(false);
+    expect(() => construirNoEncontrado(pago({ status: 'ESPERANDO_RESPUESTA' }), AHORA))
+      .toThrow('payment_not_closable');
+    expect(puedeRechazarse(pago({ status: 'ESPERANDO_RESPUESTA' }))).toBe(true);
+  });
+});
+
+describe('corregir la vivienda no revive un pago', () => {
+  /**
+   * Cambiarle la casa a un `NO_ENCONTRADO` no hace que el banco lo respalde.
+   * Pasarlo a PENDIENTE_VERIFICACION le reservaba otra vez el mes a una
+   * vivienda por un deposito que nunca aparecio, y era ademas una transicion
+   * que la maquina de estados no permite.
+   */
+  it('un NO_ENCONTRADO se queda como esta', () => {
+    expect(estadoTrasCambiarVivienda(pago({ status: 'NO_ENCONTRADO' }), undefined)).toBe('NO_ENCONTRADO');
+  });
+
+  it('lo que estaba en curso vuelve a la cola de verificacion', () => {
+    expect(estadoTrasCambiarVivienda(pago({ status: 'ESPERANDO_RESPUESTA' }), undefined)).toBe('PENDIENTE_VERIFICACION');
+  });
+
+  it('si queda otro motivo abierto, sigue en revision', () => {
+    expect(estadoTrasCambiarVivienda(pago({ status: 'EN_REVISION' }), 'amount_above_expected')).toBe('EN_REVISION');
   });
 });

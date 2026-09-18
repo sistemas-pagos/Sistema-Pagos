@@ -19,6 +19,12 @@ export const BASE_PERIOD = '2026-09';
  */
 const LIBERAN_EL_MES = new Set<PaymentRecord['status']>(['NO_ENCONTRADO', 'RECHAZADO', 'DUPLICADO']);
 
+/**
+ * La misma lista, para que una prueba pueda comprobar que un estado libera el
+ * mes de verdad en vez de conformarse con que el texto diga "RECHAZADO".
+ */
+export const LIBERAN_EL_MES_PARA_PRUEBAS: ReadonlySet<PaymentRecord['status']> = LIBERAN_EL_MES;
+
 export interface HomeForPeriod extends HomeRef {
   /** Fecha de alta. A una vivienda no se le cobran meses anteriores a ella. */
   startDate?: string;

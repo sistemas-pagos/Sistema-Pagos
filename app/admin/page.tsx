@@ -6,6 +6,7 @@ import { periodFromDate, isPeriod, periodLabel } from '@/src/domain/periods';
 import type { MonthlyCollectionStatus } from '@/src/domain/types';
 import { buildDashboardSnapshot } from '@/src/services/dashboard';
 import { buildHouseHistoryGrid, type HousePeriodState } from '@/src/services/house-history';
+import { puedeMarcarseSinRespaldo, puedeRechazarse } from '@/src/services/acciones-panel';
 import { canManuallyVerify } from '@/src/services/manual-verification';
 import { getPaymentStore } from '@/src/storage';
 
@@ -271,11 +272,27 @@ export default async function AdminPage({
                       <button className="primary-button" type="submit">Verifiqué en banco</button>{' '}
                     </form>
                   )}
-                  {(payment.reviewReason === 'amount_below_expected' || payment.reviewReason === 'amount_above_expected') && <span>⚠ Revisar monto</span>}
+                  {(payment.reviewReason === 'amount_below_expected' || payment.reviewReason === 'amount_above_expected') && <span>⚠ Revisar monto{' '}</span>}
                   {payment.duplicateOf && (
                     <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
                       <input type="hidden" name="action" value="mark-duplicate" /><input type="hidden" name="period" value={period} />
-                      <button type="submit">Marcar duplicado</button>
+                      <button type="submit">Marcar duplicado</button>{' '}
+                    </form>
+                  )}
+                  {/* Sin estas dos, un pago que no se puede verificar no tiene
+                      salida: se queda en revision para siempre ocupando el mes
+                      de esa vivienda (H9). */}
+                  {puedeMarcarseSinRespaldo(payment) && (
+                    <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
+                      <input type="hidden" name="action" value="mark-not-found" /><input type="hidden" name="period" value={period} />
+                      <button type="submit" title="El banco todavía no respalda este comprobante. Vuelve a mirarse con el próximo extracto.">Sin respaldo del banco</button>{' '}
+                    </form>
+                  )}
+                  {puedeRechazarse(payment) && (
+                    <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
+                      <input type="hidden" name="action" value="reject" /><input type="hidden" name="period" value={period} />
+                      <input name="reason" placeholder="Motivo del rechazo" required maxLength={200} />{' '}
+                      <button type="submit" title="Cierra el caso y libera el mes de esa vivienda.">Rechazar</button>
                     </form>
                   )}
                 </td>

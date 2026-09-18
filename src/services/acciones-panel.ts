@@ -33,20 +33,53 @@ export function puedeCambiarDeVivienda(pago: PaymentRecord): boolean {
 }
 
 /**
- * Los estados desde los que una persona puede cerrar un caso a mano.
+ * En que estado queda un pago al que se le corrige la vivienda.
  *
- * Un pago ya verificado no se rechaza por aca: se anula, que es otra cosa y
- * deja rastro distinto (invariante 10).
+ * Un `NO_ENCONTRADO` se queda como esta: cambiarle la casa no hace que el banco
+ * lo respalde, y la conciliacion del proximo extracto lo vuelve a mirar igual.
+ * Pasarlo a PENDIENTE_VERIFICACION le reservaba otra vez el mes a una vivienda
+ * por un deposito que nunca aparecio — y era ademas una transicion que la
+ * maquina de estados no permite.
  */
-const PUEDEN_CERRARSE = new Set<PaymentStatus>([
+export function estadoTrasCambiarVivienda(pago: PaymentRecord, motivoPendiente: string | undefined): PaymentStatus {
+  if (pago.status === 'NO_ENCONTRADO') return 'NO_ENCONTRADO';
+  const destino: PaymentStatus = motivoPendiente ? 'EN_REVISION' : 'PENDIENTE_VERIFICACION';
+  assertTransition(pago.status, destino);
+  return destino;
+}
+
+/**
+ * Desde donde se puede rechazar y desde donde marcar "no encontrado".
+ *
+ * No son la misma lista, y la diferencia la manda `status-machine.ts`: un pago
+ * que todavia espera la vivienda se puede rechazar, pero no se puede decir que
+ * el banco no lo respalda —nunca se busco, porque no se sabe de que casa es—.
+ *
+ * Tenerlas juntas no era un detalle: `construirNoEncontrado` tiraba desde
+ * ESPERANDO_RESPUESTA por una transicion invalida, la ruta no lo atajaba y el
+ * pedido terminaba en 500. La invariante 14 prohibe justamente eso.
+ *
+ * Un pago ya verificado no se cierra por aca: se anula, que deja otro rastro
+ * (invariante 10).
+ */
+const PUEDEN_RECHAZARSE = new Set<PaymentStatus>([
   'ESPERANDO_RESPUESTA',
   'PENDIENTE_VERIFICACION',
   'EN_REVISION',
   'NO_ENCONTRADO',
 ]);
 
-export function puedeCerrarse(pago: PaymentRecord): boolean {
-  return PUEDEN_CERRARSE.has(pago.status);
+const PUEDEN_MARCARSE_SIN_RESPALDO = new Set<PaymentStatus>([
+  'PENDIENTE_VERIFICACION',
+  'EN_REVISION',
+]);
+
+export function puedeRechazarse(pago: PaymentRecord): boolean {
+  return PUEDEN_RECHAZARSE.has(pago.status);
+}
+
+export function puedeMarcarseSinRespaldo(pago: PaymentRecord): boolean {
+  return PUEDEN_MARCARSE_SIN_RESPALDO.has(pago.status);
 }
 
 /**
@@ -63,7 +96,7 @@ export function puedeCerrarse(pago: PaymentRecord): boolean {
 export function construirRechazo(pago: PaymentRecord, motivo: string, ahora: Date): PaymentRecord {
   const limpio = motivo.trim();
   if (!limpio) throw new Error('rejection_reason_required');
-  if (!puedeCerrarse(pago)) throw new Error('payment_not_closable');
+  if (!puedeRechazarse(pago)) throw new Error('payment_not_closable');
   assertTransition(pago.status, 'RECHAZADO');
 
   return {
@@ -82,7 +115,7 @@ export function construirRechazo(pago: PaymentRecord, motivo: string, ahora: Dat
  * verificar. Rechazar es decir "este pago no va".
  */
 export function construirNoEncontrado(pago: PaymentRecord, ahora: Date): PaymentRecord {
-  if (!puedeCerrarse(pago)) throw new Error('payment_not_closable');
+  if (!puedeMarcarseSinRespaldo(pago)) throw new Error('payment_not_closable');
   assertTransition(pago.status, 'NO_ENCONTRADO');
 
   return {
