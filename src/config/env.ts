@@ -16,6 +16,12 @@ const optionalString = z.preprocess(
   enBlancoEsAusente,
   z.string().trim().min(1).optional(),
 );
+/** Largo minimo de una clave que de verdad no se adivina. */
+export const LARGO_MINIMO_SECRETO = 24;
+const secretoLargo = z.preprocess(
+  enBlancoEsAusente,
+  z.string().trim().min(LARGO_MINIMO_SECRETO).optional(),
+);
 const optionalLast4 = z.preprocess(
   enBlancoEsAusente,
   z.string().trim().regex(/^\d{4}$/).optional(),
@@ -27,8 +33,13 @@ const envSchema = z.object({
   MAX_RECEIPT_BYTES: z.preprocess(enBlancoEsAusente, z.coerce.number().int().positive().max(20 * 1024 * 1024).default(8 * 1024 * 1024)),
   PENDING_CONTEXT_MINUTES: z.preprocess(enBlancoEsAusente, z.coerce.number().int().positive().max(24 * 60).default(30)),
   EXPECTED_PAYMENT_AMOUNT: z.preprocess(enBlancoEsAusente, z.coerce.number().positive().default(150)),
-  ADMIN_ACCESS_KEY: optionalString,
-  AUTH_SESSION_SECRET: optionalString,
+  // Un minimo de largo, no un `optionalString` cualquiera. Estas dos son lo
+  // unico que separa el panel de produccion de cualquiera que pase: una clave
+  // corta se adivina aunque haya limite de intentos, y un secreto de sesion
+  // corto se rompe sin necesidad de intentar nada. Quedan fuera del arranque si
+  // no cumplen; el mensaje nombra la variable y nunca su valor.
+  ADMIN_ACCESS_KEY: secretoLargo,
+  AUTH_SESSION_SECRET: secretoLargo,
   GOOGLE_SHEET_ID: optionalString,
   GOOGLE_CLIENT_EMAIL: optionalString,
   GOOGLE_PRIVATE_KEY: optionalString,

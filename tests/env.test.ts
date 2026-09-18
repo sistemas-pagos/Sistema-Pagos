@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { env, resetEnvForTests } from '@/src/config/env';
+import { LARGO_MINIMO_SECRETO, env, resetEnvForTests } from '@/src/config/env';
 
 const VARIABLES = [
   'APP_MODE', 'APP_BASE_URL', 'MAX_RECEIPT_BYTES', 'PENDING_CONTEXT_MINUTES',
   'EXPECTED_PAYMENT_AMOUNT', 'WHATSAPP_GRAPH_VERSION', 'EXPECTED_ACCOUNT_LAST4',
-  'PAGOS_TURSO_URL',
+  'PAGOS_TURSO_URL', 'ADMIN_ACCESS_KEY', 'AUTH_SESSION_SECRET',
 ] as const;
 
 afterEach(() => {
@@ -51,5 +51,44 @@ describe('variables de entorno', () => {
     resetEnvForTests();
 
     expect(() => env()).toThrow();
+  });
+
+  /**
+   * La clave del panel y el secreto de sesion son lo unico que separa
+   * produccion de cualquiera que pase. Una clave corta se adivina aunque haya
+   * limite de intentos, asi que no se puede configurar: el arranque falla.
+   */
+  it('no acepta una clave de panel corta', () => {
+    process.env.ADMIN_ACCESS_KEY = 'clave123';
+    resetEnvForTests();
+
+    expect(() => env()).toThrow();
+  });
+
+  it('no acepta un secreto de sesion corto', () => {
+    process.env.AUTH_SESSION_SECRET = 'corto';
+    resetEnvForTests();
+
+    expect(() => env()).toThrow();
+  });
+
+  /** El mensaje nombra la variable, nunca su valor (invariante 12). */
+  it('al rechazarla no repite la clave en el error', () => {
+    process.env.ADMIN_ACCESS_KEY = 'clave-secreta-corta';
+    resetEnvForTests();
+
+    expect(() => env()).toThrow(/ADMIN_ACCESS_KEY/);
+    try {
+      env();
+    } catch (error) {
+      expect(String(error)).not.toContain('clave-secreta-corta');
+    }
+  });
+
+  it('acepta una de largo suficiente', () => {
+    process.env.ADMIN_ACCESS_KEY = 'x'.repeat(LARGO_MINIMO_SECRETO);
+    resetEnvForTests();
+
+    expect(env().ADMIN_ACCESS_KEY).toHaveLength(LARGO_MINIMO_SECRETO);
   });
 });
