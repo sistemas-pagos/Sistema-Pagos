@@ -3,11 +3,9 @@ import type { PaymentStore } from '@/src/storage/types';
 import { compareHomes } from '@/src/domain/housing';
 
 const COUNTABLE_PAYMENT_STATUSES = new Set<PaymentRecord['status']>([
-  'COMPROBANTE_RECIBIDO',
-  'PROCESANDO',
-  'EXTRAIDO',
   'PENDIENTE_VERIFICACION',
   'VERIFICADO',
+  'EFECTIVO_COBRADO',
   'NO_ENCONTRADO',
   'EN_REVISION',
 ]);
@@ -34,14 +32,14 @@ function usablePayments(payments: readonly PaymentRecord[], home: HomeRecord, pe
 }
 
 function classify(payments: readonly PaymentRecord[]): MonthlyCollectionStatus {
-  if (payments.some((payment) => payment.status === 'VERIFICADO')) return 'PAGADO';
+  if (payments.some((payment) => payment.status === 'VERIFICADO' || payment.status === 'EFECTIVO_COBRADO')) return 'PAGADO';
   if (payments.some((payment) => payment.status === 'EN_REVISION' || payment.status === 'NO_ENCONTRADO')) return 'EN_REVISION';
   if (payments.length > 0) return 'POR_VERIFICAR';
   return 'PENDIENTE';
 }
 
 function representativeRank(payment: PaymentRecord): number {
-  if (payment.status === 'VERIFICADO') return 3;
+  if (payment.status === 'VERIFICADO' || payment.status === 'EFECTIVO_COBRADO') return 3;
   if (payment.status === 'EN_REVISION' || payment.status === 'NO_ENCONTRADO') return 2;
   return 1;
 }

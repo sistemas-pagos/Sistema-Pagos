@@ -4,7 +4,7 @@ import { deriveMonthlyHomeStatus, isHomeActiveInPeriod } from '@/src/services/mo
 import type { PaymentStore } from '@/src/storage/types';
 
 const RECEIVED_STATUSES = new Set<PaymentRecord['status']>([
-  'PENDIENTE_VERIFICACION', 'VERIFICADO', 'NO_ENCONTRADO', 'EN_REVISION', 'SIN_IDENTIFICAR', 'ESPERANDO_RESPUESTA',
+  'PENDIENTE_VERIFICACION', 'VERIFICADO', 'EFECTIVO_COBRADO', 'NO_ENCONTRADO', 'EN_REVISION', 'ESPERANDO_RESPUESTA',
 ]);
 
 function isReceived(payment: PaymentRecord): boolean {
@@ -25,7 +25,7 @@ export async function buildDashboardSnapshot(store: PaymentStore, period: string
   const received = accountingPayments(allPayments).filter(isReceived);
   const assigned = received.filter((payment) => payment.stage != null && payment.block != null && payment.house != null);
   const assignedToActiveHomes = assigned.filter((payment) => activeHomeKeys.has(homeKey({ stage: payment.stage!, block: payment.block!, house: payment.house! })));
-  const verifiedAssigned = assignedToActiveHomes.filter((payment) => payment.status === 'VERIFICADO');
+  const verifiedAssigned = assignedToActiveHomes.filter((payment) => payment.status === 'VERIFICADO' || payment.status === 'EFECTIVO_COBRADO');
   const paidRows = monthlyStatus.filter((row) => row.status === 'PAGADO');
   const verifyingRows = monthlyStatus.filter((row) => row.status === 'POR_VERIFICAR');
   const reviewRows = monthlyStatus.filter((row) => row.status === 'EN_REVISION');
@@ -95,7 +95,7 @@ export async function buildDashboardSnapshot(store: PaymentStore, period: string
     blocks,
     monthlyStatus,
     payments: [...allPayments].sort(sortNewest).map(toRow),
-    unidentified: allPayments.filter((payment) => payment.status === 'SIN_IDENTIFICAR' || payment.status === 'ESPERANDO_RESPUESTA').sort(sortNewest).map(toRow),
+    unidentified: allPayments.filter((payment) => payment.status === 'ESPERANDO_RESPUESTA').sort(sortNewest).map(toRow),
     duplicates: allPayments.filter((payment) => payment.status === 'DUPLICADO').sort(sortNewest).map(toRow),
     review: allPayments.filter((payment) => payment.status === 'EN_REVISION' || payment.status === 'NO_ENCONTRADO').sort(sortNewest).map(toRow),
   };
