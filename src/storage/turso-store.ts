@@ -2,7 +2,7 @@ import type { Client, Row } from '@libsql/client';
 import { env } from '@/src/config/env';
 import type { HomeRecord, PaymentRecord, PaymentStatus, PendingConversation, ProcessedMessage } from '@/src/domain/types';
 import { codigoVivienda, emitirRecibo, enTransaccion, registrarEvento } from '@/src/storage/turso';
-import type { PaymentStore } from './types';
+import type { CambioDePago, PaymentStore } from './types';
 
 /**
  * El almacen sobre Turso, que reemplaza a Google Sheets como base
@@ -189,18 +189,40 @@ export class TursoPaymentStore implements PaymentStore {
     });
   }
 
-  async updatePayment(pago: PaymentRecord): Promise<void> {
-    const resultado = await this.db.execute({
-      sql: `UPDATE pagos SET
-              vivienda_id = ?, monto_centavos = ?, fecha_pago = ?, hora_pago = ?, banco = ?,
-              referencia = ?, depositante = ?, beneficiario = ?, cuenta_ultimos4 = ?, detalle = ?,
-              estado = ?, periodo = ?, motivo_revision = ?, telefono_contacto = ?, archivo_sha256 = ?,
-              duplicado_de = ?, duplicado_motivo = ?, verificacion_origen = ?, verificado_en = ?,
-              movimiento_id = ?, actualizado_en = ?
-            WHERE id = ?`,
-      args: [...this.argumentosDePago(pago, await this.viviendaId(pago)), pago.updatedAt, pago.id] as never[],
+  /**
+   * El UPDATE y su evento van en la misma transaccion (invariante 8).
+   *
+   * El `antes` se lee adentro de la transaccion y no antes: leerlo afuera
+   * dejaria una ventana en la que otro cambio se cuela y el evento contaria
+   * una historia que no paso.
+   */
+  async updatePayment(pago: PaymentRecord, cambio: CambioDePago): Promise<void> {
+    const viviendaId = await this.viviendaId(pago);
+
+    await enTransaccion(this.db, async (tx) => {
+      const previo = await tx.execute({ sql: 'SELECT estado FROM pagos WHERE id = ?', args: [pago.id] });
+      if (previo.rows.length === 0) throw new Error('payment_not_found');
+      const antes = String(previo.rows[0].estado);
+
+      await tx.execute({
+        sql: `UPDATE pagos SET
+                vivienda_id = ?, monto_centavos = ?, fecha_pago = ?, hora_pago = ?, banco = ?,
+                referencia = ?, depositante = ?, beneficiario = ?, cuenta_ultimos4 = ?, detalle = ?,
+                estado = ?, periodo = ?, motivo_revision = ?, telefono_contacto = ?, archivo_sha256 = ?,
+                duplicado_de = ?, duplicado_motivo = ?, verificacion_origen = ?, verificado_en = ?,
+                movimiento_id = ?, actualizado_en = ?
+              WHERE id = ?`,
+        args: [...this.argumentosDePago(pago, viviendaId), pago.updatedAt, pago.id] as never[],
+      });
+
+      // Ni telefonos, ni viviendas, ni montos: el evento dice que cambio y por
+      // que, no los datos del vecino (invariante 12).
+      await registrarEvento(tx, {
+        entidad: 'pagos', entidadId: pago.id, accion: 'ACTUALIZAR',
+        antes: { estado: antes }, despues: { estado: pago.status },
+        motivo: cambio.motivo, actor: cambio.actor,
+      }, pago.updatedAt);
     });
-    if (resultado.rowsAffected === 0) throw new Error('payment_not_found');
   }
 
   /**

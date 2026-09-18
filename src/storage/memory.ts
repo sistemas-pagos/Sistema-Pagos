@@ -1,5 +1,5 @@
 import type { HomeRecord, PaymentRecord, PendingConversation, ProcessedMessage } from '@/src/domain/types';
-import type { PaymentStore } from './types';
+import type { CambioDePago, PaymentStore } from './types';
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -17,6 +17,7 @@ export class MemoryPaymentStore implements PaymentStore {
   /** Un recibo por pago, numerado sin repetir (invariante 10). */
   private receipts = new Map<string, number>();
   private nextReceipt = 1;
+  private changes: (CambioDePago & { paymentId: string })[] = [];
   private readonly now: () => Date;
 
   constructor(
@@ -44,14 +45,20 @@ export class MemoryPaymentStore implements PaymentStore {
     this.payments.set(payment.id, clone(payment));
   }
 
-  async updatePayment(payment: PaymentRecord): Promise<void> {
+  async updatePayment(payment: PaymentRecord, cambio: CambioDePago): Promise<void> {
     if (!this.payments.has(payment.id)) throw new Error('payment_not_found');
+    this.changes.push({ paymentId: payment.id, ...cambio });
     this.payments.set(payment.id, clone(payment));
   }
 
+  /** Solo para las pruebas: lo que en Turso seria la tabla `eventos`. */
+  changesFor(paymentId: string): CambioDePago[] {
+    return this.changes.filter((cambio) => cambio.paymentId === paymentId);
+  }
+
   /** Quien verifica no se guarda: el almacen de demo no tiene tabla de usuarios. */
-  async verifyPayment(payment: PaymentRecord): Promise<number> {
-    await this.updatePayment(payment);
+  async verifyPayment(payment: PaymentRecord, verifiedBy?: string): Promise<number> {
+    await this.updatePayment(payment, { actor: verifiedBy ?? payment.verificationSource ?? 'sistema', motivo: 'verificado' });
     const emitido = this.receipts.get(payment.id);
     if (emitido !== undefined) return emitido;
 

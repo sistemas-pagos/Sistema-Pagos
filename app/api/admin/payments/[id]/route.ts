@@ -1,4 +1,12 @@
 import { NextResponse } from 'next/server';
+
+/**
+ * Quien hizo el cambio, para `eventos`. Hoy el panel entra con una sola clave
+ * compartida, asi que no hay persona que registrar: el usuario por persona es
+ * parte de la fase 7, y hasta entonces decir "panel" es lo unico cierto.
+ */
+const ACTOR_PANEL = 'panel';
+
 import { isAdminAuthenticated, isSameOriginRequest } from '@/src/auth/guard';
 import { isPeriod } from '@/src/domain/periods';
 import type { PaymentRecord } from '@/src/domain/types';
@@ -48,14 +56,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       updated = { ...updated, status: 'EN_REVISION', reviewReason: 'service_period_already_has_payment' };
     }
 
-    await store.updatePayment(updated);
+    await store.updatePayment(updated, { actor: ACTOR_PANEL, motivo: 'cambio_de_mes' });
     return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
   }
 
   if (action === 'verify-manually' || action === 'verify-reviewed') {
     try {
       const allPayments = await store.listPayments();
-      await store.updatePayment(buildManualVerificationUpdate(payment, allPayments, new Date(), action === 'verify-reviewed'));
+      // `verifyPayment` y no `updatePayment`: verificar desde el panel es la
+      // otra puerta a VERIFICADO, y por aca el vecino tambien tiene que recibir
+      // su recibo. Con `updatePayment` quedaba pagado y sin comprobante.
+      await store.verifyPayment(buildManualVerificationUpdate(payment, allPayments, new Date(), action === 'verify-reviewed'));
     } catch {
       return new NextResponse('Payment is not eligible for manual verification', { status: 409 });
     }
@@ -72,7 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       duplicateReason: payment.duplicateReason ?? payment.reviewReason ?? 'manual_review_duplicate',
       reviewReason: undefined,
       updatedAt: new Date().toISOString(),
-    });
+    }, { actor: ACTOR_PANEL, motivo: payment.duplicateReason ?? payment.reviewReason ?? 'manual_review_duplicate' });
     return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
   }
 
@@ -81,7 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!motivo) return new NextResponse('Rejection reason is required', { status: 400 });
     if (!puedeRechazarse(payment)) return new NextResponse('Payment cannot be closed from its current state', { status: 409 });
 
-    await store.updatePayment(construirRechazo(payment, motivo, new Date()));
+    await store.updatePayment(construirRechazo(payment, motivo, new Date()), { actor: ACTOR_PANEL, motivo });
     // Cerrar el caso cierra tambien la conversacion: si no, la respuesta que el
     // vecino mande despues revive el pago rechazado y le reserva el mes otra vez.
     await store.clearPending(payment.phone);
@@ -91,7 +102,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (action === 'mark-not-found') {
     if (!puedeMarcarseSinRespaldo(payment)) return new NextResponse('Payment cannot be closed from its current state', { status: 409 });
 
-    await store.updatePayment(construirNoEncontrado(payment, new Date()));
+    await store.updatePayment(construirNoEncontrado(payment, new Date()), { actor: ACTOR_PANEL, motivo: 'manual_admin_not_found' });
     await store.clearPending(payment.phone);
     return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
   }
@@ -135,7 +146,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       updated = { ...updated, status: 'EN_REVISION', reviewReason: 'service_period_already_has_payment' };
     }
 
-    await store.updatePayment(updated);
+    await store.updatePayment(updated, { actor: ACTOR_PANEL, motivo: 'vivienda_asignada' });
     await store.clearPending(payment.phone);
     return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
   }

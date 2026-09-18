@@ -100,13 +100,13 @@ describe('guardar y releer un pago', () => {
     await guardar(store, pago());
     const verificado = { ...pago(), status: 'VERIFICADO' as const, verifiedAt: '2026-09-16T12:00:00.000Z', verificationSource: 'extracto-bac', updatedAt: '2026-09-16T12:00:00.000Z' };
 
-    await store.updatePayment(verificado);
+    await store.updatePayment(verificado, { actor: 'prueba', motivo: 'verificado a mano' });
 
     expect(await store.getPayment('pay-1')).toEqual(verificado);
   });
 
   it('se queja si el pago que se actualiza no existe', async () => {
-    await expect(store.updatePayment(pago({ id: 'no-existe' }))).rejects.toThrow('payment_not_found');
+    await expect(store.updatePayment(pago({ id: 'no-existe' }), { actor: 'prueba' })).rejects.toThrow('payment_not_found');
   });
 
   /** Un pago llega antes de saber de que casa es (ESPERANDO_RESPUESTA). */
@@ -267,5 +267,54 @@ describe('mensajes ya procesados', () => {
 
     const { rows } = await db.execute("SELECT media_id, cuerpo, estado FROM mensajes WHERE message_id = 'msg-8'");
     expect(rows[0]).toMatchObject({ media_id: null, cuerpo: null, estado: 'PROCESADO' });
+  });
+});
+
+describe('el rastro de cada cambio', () => {
+  /**
+   * Invariante 8: nada se sobrescribe sin evento. Antes, ni las acciones del
+   * panel ni la conciliacion dejaban rastro — el motivo que una persona
+   * escribia al rechazar un pago vivia en una columna que la siguiente
+   * verificacion borraba, y despues no habia forma de explicar nada.
+   */
+  it('escribe quien y por que en eventos', async () => {
+    await guardar(store, pago());
+
+    await store.updatePayment(
+      { ...pago(), status: 'RECHAZADO', updatedAt: '2026-09-16T12:00:00.000Z' },
+      { actor: 'panel', motivo: 'Pagó dos meses; se registra aparte' },
+    );
+
+    const { rows } = await db.execute("SELECT actor, motivo, antes_json, despues_json FROM eventos WHERE accion = 'ACTUALIZAR'");
+    expect(rows[0]).toMatchObject({ actor: 'panel', motivo: 'Pagó dos meses; se registra aparte' });
+    expect(JSON.parse(String(rows[0].antes_json))).toEqual({ estado: 'PENDIENTE_VERIFICACION' });
+    expect(JSON.parse(String(rows[0].despues_json))).toEqual({ estado: 'RECHAZADO' });
+  });
+
+  /** El evento dice que cambio, no los datos del vecino (invariante 12). */
+  it('no guarda telefonos ni viviendas en el evento', async () => {
+    await guardar(store, pago());
+
+    await store.updatePayment({ ...pago(), status: 'EN_REVISION' }, { actor: 'panel' });
+
+    const { rows } = await db.execute("SELECT antes_json, despues_json FROM eventos WHERE accion = 'ACTUALIZAR'");
+    const texto = `${String(rows[0].antes_json)}${String(rows[0].despues_json)}`;
+    expect(texto).not.toContain('504');
+    expect(texto).not.toContain('E1B4C18');
+  });
+
+  /**
+   * El UPDATE y su evento van juntos. Si el evento fallara y el cambio quedara,
+   * `eventos` dejaria de ser el registro de lo que paso — que es lo unico que
+   * lo hace servir para algo.
+   */
+  it('no cambia el pago si no puede dejar constancia', async () => {
+    await guardar(store, pago());
+    await db.execute('DROP TABLE eventos');
+
+    await expect(store.updatePayment({ ...pago(), status: 'RECHAZADO' }, { actor: 'panel' })).rejects.toThrow();
+
+    const { rows } = await db.execute("SELECT estado FROM pagos WHERE id = 'pay-1'");
+    expect(rows[0].estado).toBe('PENDIENTE_VERIFICACION');
   });
 });
