@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { isAdminAuthenticated, isSameOriginRequest } from '@/src/auth/guard';
 import { isPeriod } from '@/src/domain/periods';
 import { buildManualVerificationUpdate } from '@/src/services/manual-verification';
+import {
+  construirNoEncontrado,
+  construirRechazo,
+  puedeCambiarDeVivienda,
+  puedeCerrarse,
+} from '@/src/services/acciones-panel';
 import { assignServicePeriod, hasPeriodConflict } from '@/src/services/period-assignment';
 import { getPaymentStore } from '@/src/storage';
 import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
@@ -67,7 +73,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
   }
 
+  if (action === 'reject') {
+    const motivo = String(form.get('reason') ?? '').trim();
+    if (!motivo) return new NextResponse('Rejection reason is required', { status: 400 });
+    if (!puedeCerrarse(payment)) return new NextResponse('Payment cannot be closed from its current state', { status: 409 });
+
+    await store.updatePayment(construirRechazo(payment, motivo, new Date()));
+    return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
+  }
+
+  if (action === 'mark-not-found') {
+    if (!puedeCerrarse(payment)) return new NextResponse('Payment cannot be closed from its current state', { status: 409 });
+
+    await store.updatePayment(construirNoEncontrado(payment, new Date()));
+    return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
+  }
+
   if (action === 'assign-home') {
+    // H8: sin esto, reasignar la casa de un DUPLICADO lo dejaba en
+    // PENDIENTE_VERIFICACION y desde ahi se podia verificar y emitir recibo por
+    // plata que entro una sola vez.
+    if (!puedeCambiarDeVivienda(payment)) {
+      return new NextResponse('Payment cannot change home from its current state', { status: 409 });
+    }
+
     const stage = normalizeHomePart(String(form.get('stage') ?? ''));
     const block = normalizeHomePart(String(form.get('block') ?? ''));
     const house = normalizeHomePart(String(form.get('house') ?? ''));

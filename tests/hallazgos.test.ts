@@ -4,6 +4,7 @@ import { SYNTHETIC_BAC_RECEIPTS } from '@/src/demo/data';
 import { parseHomeReference } from '@/src/domain/housing';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 import { bacParser } from '@/src/parsers/bac';
+import { construirRechazo, puedeCambiarDeVivienda } from '@/src/services/acciones-panel';
 import { canManuallyVerify } from '@/src/services/manual-verification';
 import { processReceiptMessage } from '@/src/services/payment-processor';
 import { assignServicePeriod } from '@/src/services/period-assignment';
@@ -129,15 +130,25 @@ describe('hallazgos', () => {
     expect(bacParser.parse(text).reference).toBe('DEMOREF000001');
   });
 
-  it('H8: un registro DUPLICADO reasignado a otra casa por el panel queda verificable', () => {
-    // El endpoint assign-home no revisa el estado: pasa a PENDIENTE_VERIFICACION.
-    const dup = base({ status: 'DUPLICADO', duplicateOf: 'orig' });
-    const afterAssignHome = { ...dup, house: '19', status: 'PENDIENTE_VERIFICACION' as const };
-    expect(canManuallyVerify(afterAssignHome)).toBe(true);
+  /**
+   * El endpoint `assign-home` no miraba el estado, asi que un duplicado
+   * reasignado quedaba en PENDIENTE_VERIFICACION y desde ahi se podia
+   * verificar. Con la fase 4 conectada eso es un recibo emitido por plata que
+   * entro una sola vez.
+   */
+  it('H8 corregido: un DUPLICADO ya no se puede reasignar a otra casa', () => {
+    expect(puedeCambiarDeVivienda(base({ status: 'DUPLICADO', duplicateOf: 'orig' }))).toBe(false);
   });
 
-  it('H9: un monto distinto de L150 no tiene salida (no se puede verificar y no hay acción de rechazo)', () => {
+  /**
+   * Un monto distinto de la cuota sigue sin poder verificarse —esta bien que no
+   * pueda—, pero ahora tiene salida: una persona lo rechaza con un motivo, y el
+   * mes de esa vivienda queda libre.
+   */
+  it('H9 corregido: un monto distinto de L150 ya tiene salida', () => {
     const p = base({ amount: 300, status: 'EN_REVISION', reviewReason: 'amount_above_expected' });
+
     expect(canManuallyVerify(p, true)).toBe(false);
+    expect(construirRechazo(p, 'Pagó dos meses', new Date()).status).toBe('RECHAZADO');
   });
 });
