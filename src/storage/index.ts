@@ -10,9 +10,9 @@ import type { PaymentStore } from './types';
  * (docs/PLAN.md, seccion 1).
  *
  * Antes vivian en Google Sheets, y por eso el recibo no se emitia nunca: el
- * talonario esta en Turso y el pago estaba en la hoja. `google-sheets.ts` sigue
- * existiendo para las pestanias de solo lectura del panel, que es lo unico que
- * le toca segun el plan.
+ * talonario esta en Turso y el pago estaba en la hoja. Sheets vuelve en la fase
+ * 7 como destino de solo lectura para el panel, que es lo unico que le toca
+ * segun el plan.
  */
 let demoStore: MemoryPaymentStore | undefined;
 let productionStore: TursoPaymentStore | undefined;

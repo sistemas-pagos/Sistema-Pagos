@@ -47,9 +47,6 @@ jobs:
           PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
           WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
           WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           EXPECTED_BENEFICIARY: ${{ secrets.EXPECTED_BENEFICIARY }}
           EXPECTED_ACCOUNT_LAST4: ${{ secrets.EXPECTED_ACCOUNT_LAST4 }}
         run: npx tsx scripts/procesar-comprobantes.ts
