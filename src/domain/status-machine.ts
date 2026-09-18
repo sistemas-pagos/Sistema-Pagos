@@ -1,17 +1,19 @@
 import type { PaymentStatus } from './types';
 
 const TRANSITIONS: Record<PaymentStatus, readonly PaymentStatus[]> = {
-  COMPROBANTE_RECIBIDO: ['PROCESANDO', 'RECHAZADO'],
-  PROCESANDO: ['EXTRAIDO', 'EN_REVISION', 'RECHAZADO'],
-  EXTRAIDO: ['SIN_IDENTIFICAR', 'PENDIENTE_VERIFICACION', 'DUPLICADO', 'EN_REVISION'],
-  SIN_IDENTIFICAR: ['ESPERANDO_RESPUESTA', 'EN_REVISION', 'RECHAZADO'],
   ESPERANDO_RESPUESTA: ['PENDIENTE_VERIFICACION', 'EN_REVISION', 'RECHAZADO'],
   PENDIENTE_VERIFICACION: ['VERIFICADO', 'NO_ENCONTRADO', 'EN_REVISION', 'DUPLICADO', 'RECHAZADO'],
-  VERIFICADO: ['EN_REVISION'],
-  DUPLICADO: ['EN_REVISION'],
-  NO_ENCONTRADO: ['VERIFICADO', 'EN_REVISION', 'RECHAZADO'],
+  VERIFICADO: ['EN_REVISION', 'ANULADO'],
+  // El cierre de caja convierte el efectivo cobrado en verificado, sin recibo
+  // nuevo (docs/PLAN.md, fase 6).
+  EFECTIVO_COBRADO: ['VERIFICADO', 'EN_REVISION', 'ANULADO'],
   EN_REVISION: ['PENDIENTE_VERIFICACION', 'VERIFICADO', 'NO_ENCONTRADO', 'RECHAZADO'],
+  NO_ENCONTRADO: ['VERIFICADO', 'EN_REVISION', 'RECHAZADO'],
+  DUPLICADO: ['EN_REVISION'],
   RECHAZADO: ['EN_REVISION'],
+  // Un pago anulado no vuelve. La correccion entra como un pago nuevo, y el
+  // recibo se reemplaza por otro numero (invariante 10).
+  ANULADO: [],
 };
 
 export function canTransition(from: PaymentStatus, to: PaymentStatus): boolean {

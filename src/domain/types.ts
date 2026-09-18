@@ -1,15 +1,24 @@
+/**
+ * Los estados de un pago, **iguales a los del `CHECK` de `pagos`** en la
+ * migracion 001. `tests/estados-pago.test.ts` compara las dos listas: que se
+ * separen otra vez tiene que fallar en CI y no en produccion.
+ *
+ * No estan aca los estados del *procesamiento del mensaje* — recibido, en
+ * proceso, procesado —, que viven en `mensajes.estado`. Tenerlos en los dos
+ * lados era pedir que un dia dijeran cosas distintas sobre el mismo pago.
+ */
 export const PAYMENT_STATUSES = [
-  'COMPROBANTE_RECIBIDO',
-  'PROCESANDO',
-  'EXTRAIDO',
-  'SIN_IDENTIFICAR',
   'ESPERANDO_RESPUESTA',
   'PENDIENTE_VERIFICACION',
   'VERIFICADO',
-  'DUPLICADO',
-  'NO_ENCONTRADO',
+  /** Efectivo en mano del cobrador. Cuenta como pagado (invariante 2). */
+  'EFECTIVO_COBRADO',
   'EN_REVISION',
+  'NO_ENCONTRADO',
+  'DUPLICADO',
   'RECHAZADO',
+  /** Se deshizo. Libera el mes que tenia reservado (invariante 5). */
+  'ANULADO',
 ] as const;
 
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
@@ -105,6 +114,11 @@ export interface PendingConversation {
   paymentId: string;
   createdAt: string;
   expiresAt: string;
+  /**
+   * Respuestas que no sirvieron. Al agotarse, el pago pasa a revision humana en
+   * vez de seguir pidiendo lo mismo (docs/PLAN.md, fase 1).
+   */
+  attempts: number;
 }
 
 export interface ProcessedMessage {
