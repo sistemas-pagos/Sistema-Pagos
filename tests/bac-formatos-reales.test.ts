@@ -107,20 +107,20 @@ describe('beneficiario y cuenta de destino', () => {
   it('los saca de la frase de la notificacion', () => {
     const extraccion = detectAndParseReceipt(notificacion(), HOY);
     expect(extraccion.beneficiary).toBe('TITULAR DE PRUEBA');
-    expect(extraccion.destinationAccountMasked).toBe('••••2920');
+    expect(extraccion.destinationAccountMasked).toBe('••••2233');
   });
 
   it('los saca del bloque "Cuenta destino" de la pantalla', () => {
     const extraccion = detectAndParseReceipt(PANTALLA_RESULTADO, HOY);
     expect(extraccion.beneficiary).toBe('TITULAR DE PRUEBA');
-    expect(extraccion.destinationAccountMasked).toBe('••••2920');
+    expect(extraccion.destinationAccountMasked).toBe('••••2233');
   });
 
   /** En el papel el nombre se corta a la mitad de una palabra y sigue abajo. */
   it('reune el nombre partido en dos lineas del comprobante de agente', () => {
     const extraccion = detectAndParseReceipt(AGENTE, HOY);
     expect(extraccion.beneficiary).toBe('TITULAR DE PRUEBA');
-    expect(extraccion.destinationAccountMasked).toBe('••••2920');
+    expect(extraccion.destinationAccountMasked).toBe('••••2233');
   });
 });
 

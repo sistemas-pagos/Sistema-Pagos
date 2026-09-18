@@ -7,8 +7,10 @@
  * forma — que etiquetas usa, en que orden, donde parte las lineas y como
  * escribe fechas y montos —, que es lo unico que el parser necesita acertar.
  *
- * La cuenta de destino termina en 2920 en los tres, como en la realidad: es el
- * dato contra el que se comprueba que el dinero entro a la cuenta correcta.
+ * La cuenta de destino es la misma en los tres porque es el dato contra el que
+ * se comprueba que el dinero entro a la cuenta correcta — pero el numero es
+ * inventado. El real vive solo en el secreto `EXPECTED_ACCOUNT_LAST4` del
+ * Environment, nunca en el repositorio.
  */
 
 /** Notificacion compartible de la app. Es la que mas llega. */
@@ -27,7 +29,7 @@ export function notificacion(opciones: {
     'Notificación de transferencia',
     'Hola,',
     'Le informamos que PERSONA QUE DEPOSITA realizó una transferencia a la cuenta',
-    'bancaria Nº 790582920 a nombre de TITULAR DE PRUEBA.',
+    'bancaria Nº 900112233 a nombre de TITULAR DE PRUEBA.',
     `Fecha ${opciones.fecha ?? '16 septiembre 2026'}`,
     `Hora ${opciones.hora ?? '2:45 PM'}`,
     `Monto ${opciones.monto ?? 'L150.00'}`,
@@ -50,7 +52,7 @@ export const PANTALLA_RESULTADO = [
   '745374361',
   'Cuenta destino',
   'TITULAR DE PRUEBA',
-  '790582920',
+  '900112233',
   'Descripción',
   'Basura',
   'Fecha 14 septiembre',
@@ -77,7 +79,7 @@ export const AGENTE = [
   'Referencia:          004217',
   'Autorización:      400000003',
   'Tipo de Transacción:  Depósito',
-  'Número de Cuenta:   *****2920',
+  'Número de Cuenta:   *****2233',
   'Cliente:   TITULAR DE PRUE',
   'BA',
   'Detalle:   DEP.RAPIBAC 010925',

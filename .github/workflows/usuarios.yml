@@ -1,0 +1,54 @@
+name: Usuarios
+
+# Solo manual. Pone la base de acuerdo con el telefono autorizado que guarda el
+# Environment, asi que no corre solo ni por cron.
+#
+# El secreto es la fuente de verdad y la fila de `usuarios` es la copia: se
+# cambia el secreto, se corre esto, y no hay dos lugares diciendo cosas
+# distintas.
+#
+# No tiene inputs a proposito: un telefono es un dato personal y los valores de
+# un workflow_dispatch quedan a la vista en la pagina de la corrida, en un
+# repositorio publico. Los secretos, en cambio, Actions los enmascara.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usuarios
+  cancel-in-progress: false
+
+jobs:
+  alta:
+    runs-on: ubuntu-latest
+    environment: pagos-produccion
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Solo PAGOS_USUARIO_TELEFONO es obligatorio. Los otros tres tienen valor
+      # por defecto y estan aca para el dia que haga falta un segundo usuario.
+      # El script imprime el rol y que cambio. Nunca el nombre ni el telefono.
+      - name: Sincronizar el usuario autorizado
+        env:
+          PAGOS_TURSO_URL: ${{ secrets.PAGOS_TURSO_URL }}
+          PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
+          PAGOS_USUARIO_TELEFONO: ${{ secrets.PAGOS_USUARIO_TELEFONO }}
+          PAGOS_USUARIO_ROL: ${{ secrets.PAGOS_USUARIO_ROL }}
+          PAGOS_USUARIO_ID: ${{ secrets.PAGOS_USUARIO_ID }}
+          PAGOS_USUARIO_NOMBRE: ${{ secrets.PAGOS_USUARIO_NOMBRE }}
+        run: npx tsx scripts/sincronizar-usuario.ts

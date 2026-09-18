@@ -28,22 +28,47 @@ function amountReviewReason(payment: PaymentRecord): string | undefined {
   return difference < 0 ? 'amount_below_expected' : 'amount_above_expected';
 }
 
+export type ReconciliationOutcome = 'verify' | 'not_found' | 'review';
+
+export interface ReconciliationDecision {
+  payment: PaymentRecord;
+  outcome: ReconciliationOutcome;
+  /** Solo cuando el resultado es `verify`. */
+  movementId?: string;
+  reason?: string;
+}
+
+export interface ReconciliationPlan {
+  decisions: ReconciliationDecision[];
+  /**
+   * Depositos que entraron a la cuenta y ningun comprobante reclama: plata que
+   * esta en el banco y no se sabe de que casa es. No es un error del sistema
+   * —el vecino puede no haber mandado nada—, pero es lo que el tesorero tiene
+   * que salir a buscar, asi que se cuenta aparte en vez de ignorarse.
+   */
+  unclaimedMovements: BankMovement[];
+}
+
 interface Candidate {
   payment: PaymentRecord;
-  movementIndex?: number;
+  /** Los depositos a los que apunta este comprobante, pase lo que pase con el. */
+  matched: number[];
   movementId?: string;
   outcome: 'candidate' | 'not_found' | 'review';
   reason?: string;
 }
 
-export async function reconcilePendingPayments(
-  store: PaymentStore,
+/**
+ * Decide que pasaria con cada pago y cada deposito, sin escribir nada.
+ *
+ * El resumen que el tesorero confirma y la aplicacion que sigue leen este
+ * mismo plan. Si fueran dos recorridos distintos, tarde o temprano dirian
+ * cosas distintas y el "SI" dejaria de significar lo que se mostro.
+ */
+export function planReconciliation(
+  allPayments: readonly PaymentRecord[],
   movements: readonly BankMovement[],
-  source: string,
-  now = new Date(),
-): Promise<ReconciliationSummary> {
-  const summary: ReconciliationSummary = { verified: 0, notFound: 0, review: 0 };
-  const allPayments = await store.listPayments();
+): ReconciliationPlan {
   const payments = allPayments.filter((payment) => payment.status === 'PENDIENTE_VERIFICACION' || payment.status === 'NO_ENCONTRADO');
   const movementOwners = new Map<string, string>();
   allPayments.forEach((payment) => {
@@ -51,44 +76,51 @@ export async function reconcilePendingPayments(
   });
 
   const candidates: Candidate[] = payments.map((payment) => {
+    // A que depositos apunta el comprobante se busca primero y aparte de si el
+    // pago pasa las validaciones. Un comprobante que termina en revision sigue
+    // explicando de donde salio ese deposito, y el tesorero no tiene por que
+    // salir a buscar un dinero que ya tiene duenio conocido.
+    const matches = payment.reference
+      ? movements
+        .map((movement, index) => ({ movement, index }))
+        .filter(({ movement }) =>
+          normalized(movement.bank) === normalized(payment.bank)
+          && normalized(movement.reference) === normalized(payment.reference!)
+          && movement.amount === payment.amount,
+        )
+      : [];
+    const matched = matches.map(({ index }) => index);
+
     // Reconciliation is a verification boundary, so it re-validates invariants rather
     // than trusting the persisted status/reviewReason. This also protects against manual
     // Sheet edits or a different review reason masking a simultaneous exception.
     if (payment.stage == null || payment.block == null || payment.house == null) {
-      return { payment, outcome: 'review', reason: 'home_missing_for_reconciliation' };
+      return { payment, matched, outcome: 'review', reason: 'home_missing_for_reconciliation' };
     }
     const amountReason = amountReviewReason(payment);
-    if (amountReason) return { payment, outcome: 'review', reason: amountReason };
+    if (amountReason) return { payment, matched, outcome: 'review', reason: amountReason };
     if (hasPeriodConflict(payment, allPayments)) {
-      return { payment, outcome: 'review', reason: 'service_period_already_has_payment' };
+      return { payment, matched, outcome: 'review', reason: 'service_period_already_has_payment' };
     }
-    if (!payment.reference) return { payment, outcome: 'review', reason: 'reference_missing_for_reconciliation' };
+    if (!payment.reference) return { payment, matched, outcome: 'review', reason: 'reference_missing_for_reconciliation' };
 
-    const matches = movements
-      .map((movement, index) => ({ movement, index }))
-      .filter(({ movement }) =>
-        normalized(movement.bank) === normalized(payment.bank)
-        && normalized(movement.reference) === normalized(payment.reference!)
-        && movement.amount === payment.amount,
-      );
+    if (matches.length === 0) return { payment, matched, outcome: 'not_found', reason: 'bank_movement_not_found' };
+    if (matches.length > 1) return { payment, matched, outcome: 'review', reason: 'reconciliation_ambiguous' };
 
-    if (matches.length === 0) return { payment, outcome: 'not_found', reason: 'bank_movement_not_found' };
-    if (matches.length > 1) return { payment, outcome: 'review', reason: 'reconciliation_ambiguous' };
-
-    const { movement, index } = matches[0];
+    const { movement } = matches[0];
     if (payment.transactionDate && movement.transactionDate && payment.transactionDate !== movement.transactionDate) {
-      return { payment, outcome: 'review', reason: 'reconciliation_date_conflict' };
+      return { payment, matched, outcome: 'review', reason: 'reconciliation_date_conflict' };
     }
 
     const movementId = movement.id?.trim();
-    if (!movementId) return { payment, outcome: 'review', reason: 'bank_movement_id_missing' };
+    if (!movementId) return { payment, matched, outcome: 'review', reason: 'bank_movement_id_missing' };
 
     const owner = movementOwners.get(movementId);
     if (owner && owner !== payment.id) {
-      return { payment, outcome: 'review', reason: 'bank_movement_already_used' };
+      return { payment, matched, outcome: 'review', reason: 'bank_movement_already_used' };
     }
 
-    return { payment, movementIndex: index, movementId, outcome: 'candidate' };
+    return { payment, matched, movementId, outcome: 'candidate' };
   });
 
   const claims = new Map<string, number>();
@@ -98,26 +130,57 @@ export async function reconcilePendingPayments(
     }
   });
 
-  for (const candidate of candidates) {
-    const { payment } = candidate;
-    let updated: PaymentRecord;
+  const decisions: ReconciliationDecision[] = candidates.map((candidate) => {
     if (candidate.outcome === 'candidate' && candidate.movementId && claims.get(candidate.movementId) === 1) {
+      return { payment: candidate.payment, outcome: 'verify', movementId: candidate.movementId };
+    }
+    if (candidate.outcome === 'not_found') {
+      return { payment: candidate.payment, outcome: 'not_found', reason: candidate.reason };
+    }
+    return {
+      payment: candidate.payment,
+      outcome: 'review',
+      reason: candidate.outcome === 'candidate' ? 'reconciliation_movement_claimed_multiple_times' : candidate.reason,
+    };
+  });
+
+  // Un deposito esta reclamado si algun comprobante apunta a el, aunque ese
+  // comprobante termine en revision: el dinero ya tiene duenio conocido.
+  const reclamados = new Set(candidates.flatMap((candidate) => candidate.matched));
+  const unclaimedMovements = movements.filter((movement, index) =>
+    !reclamados.has(index) && !(movement.id && movementOwners.has(movement.id)));
+
+  return { decisions, unclaimedMovements };
+}
+
+export async function reconcilePendingPayments(
+  store: PaymentStore,
+  movements: readonly BankMovement[],
+  source: string,
+  now = new Date(),
+): Promise<ReconciliationSummary> {
+  const summary: ReconciliationSummary = { verified: 0, notFound: 0, review: 0 };
+  const { decisions } = planReconciliation(await store.listPayments(), movements);
+
+  for (const decision of decisions) {
+    const { payment } = decision;
+    let updated: PaymentRecord;
+    if (decision.outcome === 'verify') {
       updated = {
         ...payment,
         status: 'VERIFICADO',
         reviewReason: undefined,
         verificationSource: source,
         verifiedAt: now.toISOString(),
-        bankMovementId: candidate.movementId,
+        bankMovementId: decision.movementId,
         updatedAt: now.toISOString(),
       };
       summary.verified += 1;
-    } else if (candidate.outcome === 'not_found') {
-      updated = { ...payment, status: 'NO_ENCONTRADO', reviewReason: candidate.reason, updatedAt: now.toISOString() };
+    } else if (decision.outcome === 'not_found') {
+      updated = { ...payment, status: 'NO_ENCONTRADO', reviewReason: decision.reason, updatedAt: now.toISOString() };
       summary.notFound += 1;
     } else {
-      const reason = candidate.outcome === 'candidate' ? 'reconciliation_movement_claimed_multiple_times' : candidate.reason;
-      updated = { ...payment, status: 'EN_REVISION', reviewReason: reason, updatedAt: now.toISOString() };
+      updated = { ...payment, status: 'EN_REVISION', reviewReason: decision.reason, updatedAt: now.toISOString() };
       summary.review += 1;
     }
     await store.updatePayment(updated);
