@@ -110,6 +110,32 @@ El resumen **no nombra a nadie**: ni vivienda, ni depositante, ni referencia, ni
 Con contar alcanza para decidir, y ese texto se guarda en `resumen_json` y viaja por
 WhatsApp.
 
+## De la importación al «SI»
+
+```
+extracto → registrarImportacion  (PENDIENTE_CONFIRMACION, guarda los movimientos)
+              ↓  resumen al tesorero
+           "SI" → cerrarImportacion('APLICADA')  → verificar y emitir recibos
+           nada → expirarImportaciones           → EXPIRADA
+```
+
+Dos cosas se garantizan en la base y no en el código que lee los mensajes, porque ese código
+corre en varios workers a la vez:
+
+- **El mismo archivo no entra dos veces** (`archivo_sha256` UNIQUE). El tesorero reenvía el
+  archivo cuando no le llega respuesta; si entrara dos veces habría dos confirmaciones vivas
+  para lo mismo.
+- **Un «SI» repetido no aplica dos veces.** El cambio de estado *es* la carrera: el `UPDATE`
+  va condicionado al estado anterior y deja pasar uno solo. Quien recibe `false` no aplica
+  nada. Importa porque aplicar emite recibos con números que no se reutilizan.
+
+Los movimientos repetidos entre dos descargas que se solapan son lo normal, no un error: los
+atrapa la UNIQUE de `huella`, se cuentan aparte y el movimiento queda con la importación que
+lo vio primero.
+
+Una confirmación vencida **no se puede aplicar** — sería un extracto de hace un mes contra
+pagos que ya cambiaron —, pero sí se puede cancelar.
+
 ## Lo que todavía no se sabe
 
 El archivo que sirvió de modelo es el de una cuenta personal, compartido **solo para ver la
