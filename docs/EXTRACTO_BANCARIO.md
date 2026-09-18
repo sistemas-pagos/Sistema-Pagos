@@ -81,6 +81,35 @@ es lo correcto aquí: un extracto que no suma no es un extracto.
 `parseFloat('150.00') * 100` es la cuenta que produce 14999 donde tiene que haber 15000. Los
 centavos se arman con enteros desde el texto (invariante 7).
 
+## El resumen que el tesorero confirma
+
+Aplicar un extracto verifica pagos de verdad, así que antes va un resumen y un «SI». Para
+que ese «SI» signifique algo, **el resumen y la aplicación leen el mismo plan**
+(`planReconciliation`): si fueran dos recorridos distintos, tarde o temprano dirían cosas
+distintas y lo que se confirmó no sería lo que pasó. Hay una prueba que compara las dos
+salidas.
+
+El resumen cuenta cuatro cosas:
+
+| | Qué es |
+|---|---|
+| Se verificarían | pagos que quedarían `VERIFICADO` |
+| Sin comprobante | depósitos que entraron y ningún comprobante reclama |
+| Sin depósito | comprobantes que el banco no respalda (`NO_ENCONTRADO`) |
+| A revisión | los que quedan para una persona |
+
+**Sin comprobante** es la cifra que nadie más va a mirar: es plata que ya está en la cuenta
+y no se sabe de qué casa es. El sistema no la resuelve — puede que el vecino simplemente no
+haya mandado nada —, así que sale en el resumen en vez de quedar escondida.
+
+Un depósito cuyo comprobante llegó pero quedó **en revisión** no cuenta como «sin
+comprobante»: ese dinero ya tiene dueño conocido y mandarlo a buscar sería trabajo
+inventado. Por eso el emparejamiento se calcula antes y aparte de las validaciones del pago.
+
+El resumen **no nombra a nadie**: ni vivienda, ni depositante, ni referencia, ni teléfono.
+Con contar alcanza para decidir, y ese texto se guarda en `resumen_json` y viaja por
+WhatsApp.
+
 ## Lo que todavía no se sabe
 
 El archivo que sirvió de modelo es el de una cuenta personal, compartido **solo para ver la
