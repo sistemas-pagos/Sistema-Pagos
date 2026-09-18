@@ -9,41 +9,6 @@ import { type Db, enTransaccion, registrarEvento } from '@/src/storage/turso';
  * Un silencio asi es peor que un error: el error se ve.
  */
 
-export interface ContextoPorRecordar {
-  id: string;
-  telefono: string;
-}
-
-/**
- * Contextos que vencieron sin respuesta y a los que todavia no se les mando el
- * recordatorio.
- *
- * Va aparte del barrido diario porque un recordatorio que llega al otro dia no
- * sirve: para entonces el vecino ya no se acuerda de que comprobante hablamos.
- * Lo corre el worker, que pasa cada diez minutos.
- *
- * El limite existe para que una acumulacion rara no dispare cientos de mensajes
- * en una sola corrida; lo que sobra espera diez minutos.
- */
-export async function contextosPorRecordar(db: Db, ahora: string, limite = 50): Promise<ContextoPorRecordar[]> {
-  const { rows } = await db.execute({
-    sql: `SELECT id, telefono FROM contextos
-          WHERE estado = 'ABIERTO' AND expira_en <= ? AND recordado_en IS NULL
-          ORDER BY creado_en LIMIT ?`,
-    args: [ahora, limite],
-  });
-
-  return rows.map((fila) => ({ id: String(fila.id), telefono: String(fila.telefono) }));
-}
-
-/** Se marca despues de mandarlo: si el envio falla, se reintenta en la proxima. */
-export async function marcarRecordado(db: Db, id: string, ahora: string): Promise<void> {
-  await db.execute({
-    sql: 'UPDATE contextos SET recordado_en = ? WHERE id = ? AND recordado_en IS NULL',
-    args: [ahora, id],
-  });
-}
-
 /** Por que quedo para una persona, cuando el vecino nunca contesto. */
 export const MOTIVO_SIN_RESPUESTA = 'home_reply_timeout';
 
