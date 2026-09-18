@@ -12,13 +12,18 @@
  *
  * No imprime telefonos, E/B/C, montos ni referencias (invariante 12).
  */
+import type { Client } from '@libsql/client';
 import { env } from '../src/config/env.ts';
 import { createReceiptRecognizer, type ReceiptRecognizer } from '../src/ocr/tesseract.ts';
 import { maskIdentifier, safeLog } from '../src/security/logging.ts';
+import { aplicarConfirmacion, cancelarConfirmacion, recibirExtracto } from '../src/services/conciliacion.ts';
+import { decidirConciliacion } from '../src/services/conciliacion-entrante.ts';
 import { ignoreWhatsAppMessage, processHomeReply, processReceiptMessage } from '../src/services/payment-processor.ts';
 import { getPaymentStore } from '../src/storage/index.ts';
 import { createTursoClient, tursoConfigFromEnv } from '../src/storage/turso-client.ts';
+import { importacionPendienteDe } from '../src/storage/conciliacion.ts';
 import { cerrarMensaje, mensajesPendientes, tomarMensaje, type MensajePendiente } from '../src/storage/turso.ts';
+import { puedeConciliar, usuarioPorTelefono, type Usuario } from '../src/storage/usuarios.ts';
 import { downloadWhatsAppMedia, sendWhatsAppText } from '../src/whatsapp/client.ts';
 
 type Store = Awaited<ReturnType<typeof getPaymentStore>>;
@@ -71,6 +76,59 @@ async function procesarComprobante(
   }, { store, ocr: (bytes) => recognizer.recognize(bytes) });
 }
 
+/**
+ * El texto de alguien que podria estar confirmando un extracto.
+ *
+ * Solo se mira si ese numero esta en `usuarios` con rol de conciliar. Para
+ * cualquier otro —y para el tesorero cuando no hay nada esperando— devuelve
+ * `undefined` y el mensaje sigue por el camino de siempre.
+ */
+async function procesarConfirmacion(
+  db: Client,
+  mensaje: MensajePendiente,
+  store: Store,
+  usuario: Usuario | undefined,
+) {
+  const cuerpo = mensaje.cuerpo?.trim();
+  if (!cuerpo || !puedeConciliar(usuario)) return undefined;
+
+  const ahora = new Date().toISOString();
+  const pendiente = await importacionPendienteDe(db, usuario.id, ahora);
+  const decision = decidirConciliacion(usuario, cuerpo, pendiente !== undefined);
+
+  if (decision.accion === 'confirmar') {
+    return { action: 'reply' as const, reply: await aplicarConfirmacion({ db, store }, usuario) };
+  }
+  if (decision.accion === 'cancelar') {
+    return { action: 'reply' as const, reply: await cancelarConfirmacion({ db, store }, usuario) };
+  }
+  if (decision.accion === 'no_entendido') {
+    return { action: 'reply' as const, reply: decision.respuesta };
+  }
+  return undefined;
+}
+
+/**
+ * Un documento de alguien autorizado puede ser el extracto del banco.
+ *
+ * Quien decide si lo es no es el nombre del archivo ni el tipo que declara
+ * WhatsApp —los pone quien lo manda—, sino el parser. Si no lo es, devuelve
+ * `undefined` y el mensaje sigue por el camino de siempre: el tesorero tambien
+ * es vecino y puede estar mandando su propio comprobante.
+ */
+async function procesarExtracto(
+  db: Client,
+  mensaje: MensajePendiente,
+  store: Store,
+  usuario: Usuario | undefined,
+) {
+  if (mensaje.tipo !== 'document' || !mensaje.mediaId || !puedeConciliar(usuario)) return undefined;
+
+  const media = await downloadWhatsAppMedia(mensaje.mediaId);
+  const resultado = await recibirExtracto({ db, store }, usuario, media.bytes);
+  return resultado.tipo === 'respuesta' ? { action: 'reply' as const, reply: resultado.respuesta } : undefined;
+}
+
 async function procesarTexto(mensaje: MensajePendiente, store: Store) {
   const cuerpo = mensaje.cuerpo?.trim();
   if (!cuerpo) {
@@ -120,13 +178,20 @@ async function main(): Promise<void> {
       if (!await tomarMensaje(db, mensaje.messageId, ahora)) continue;
 
       try {
+        const usuario = await usuarioPorTelefono(db, mensaje.telefono);
         let resultado;
         if (mensaje.tipo === 'text') {
-          resultado = await procesarTexto(mensaje, store);
+          resultado = await procesarConfirmacion(db, mensaje, store, usuario)
+            ?? await procesarTexto(mensaje, store);
         } else {
-          // El worker de Tesseract se arranca una sola vez, al primer comprobante.
-          recognizer ??= await createReceiptRecognizer();
-          resultado = await procesarComprobante(mensaje, store, recognizer);
+          // El extracto del banco llega como documento. Si no lo es, sigue por
+          // el camino del comprobante.
+          resultado = await procesarExtracto(db, mensaje, store, usuario);
+          if (!resultado) {
+            // El worker de Tesseract se arranca una sola vez, al primer comprobante.
+            recognizer ??= await createReceiptRecognizer();
+            resultado = await procesarComprobante(mensaje, store, recognizer);
+          }
         }
 
         if (resultado.action === 'reply' && resultado.reply) {

@@ -132,58 +132,15 @@ describe('sincronizar el autorizado con el secreto', () => {
   });
 });
 
-describe('un archivo que llega', () => {
-  const csv = { kind: 'document' as const, filename: 'Transacciones_del_mes.csv', declaredMime: 'text/csv' };
-
-  it('del tesorero, va a leerse como extracto', () => {
-    expect(decidirConciliacion(usuario(), csv, false)).toEqual({ accion: 'extracto' });
-  });
-
-  /**
-   * Fallar cerrado. Un extracto falso aplicado verifica pagos que nadie hizo,
-   * asi que quien no esta autorizado ni siquiera llega a que se mire el
-   * archivo — y tampoco se entera de que este camino existe.
-   */
-  it('de cualquier otro numero, ni se mira', () => {
-    expect(decidirConciliacion(undefined, csv, false)).toEqual({ accion: 'nada' });
-    expect(decidirConciliacion(usuario({ rol: 'COBRADOR' }), csv, false)).toEqual({ accion: 'nada' });
-  });
-
-  it('en Excel, pide que lo manden en CSV', () => {
-    const resultado = decidirConciliacion(usuario(), { kind: 'document', filename: 'movimientos.xlsx' }, false);
-
-    expect(resultado.accion).toBe('formato_no_soportado');
-    expect(resultado).toHaveProperty('respuesta', expect.stringContaining('CSV'));
-  });
-
-  /** El tesorero tambien es vecino y puede mandar su propio comprobante. */
-  it('en PDF, sigue por el camino de siempre', () => {
-    expect(decidirConciliacion(usuario(), { kind: 'document', filename: 'comprobante.pdf' }, false))
-      .toEqual({ accion: 'nada' });
-  });
-
-  it('una foto del tesorero es un comprobante, no un extracto', () => {
-    expect(decidirConciliacion(usuario(), { kind: 'image' }, false)).toEqual({ accion: 'nada' });
-  });
-
-  /** WhatsApp a veces no manda el nombre del archivo. */
-  it('sin nombre, se guia por el tipo declarado', () => {
-    expect(decidirConciliacion(usuario(), { kind: 'document', declaredMime: 'text/comma-separated-values' }, false))
-      .toEqual({ accion: 'extracto' });
-  });
-});
-
 describe('la confirmacion', () => {
-  const si = { kind: 'text' as const, body: 'Si' };
-
   it('acepta el SI como lo escribe la gente', () => {
     for (const texto of ['SI', 'si', 'Sí', 'sí.', ' SI ']) {
-      expect(decidirConciliacion(usuario(), { kind: 'text', body: texto }, true)).toEqual({ accion: 'confirmar' });
+      expect(decidirConciliacion(usuario(), texto, true)).toEqual({ accion: 'confirmar' });
     }
   });
 
   it('acepta el NO para descartarlo', () => {
-    expect(decidirConciliacion(usuario(), { kind: 'text', body: 'no' }, true)).toEqual({ accion: 'cancelar' });
+    expect(decidirConciliacion(usuario(), 'no', true)).toEqual({ accion: 'cancelar' });
   });
 
   /**
@@ -191,7 +148,7 @@ describe('la confirmacion', () => {
    * esperate" no son un si: se vuelve a preguntar, que cuesta un mensaje.
    */
   it('no adivina con una respuesta que no es exactamente SI o NO', () => {
-    const resultado = decidirConciliacion(usuario(), { kind: 'text', body: 'si pero esperate' }, true);
+    const resultado = decidirConciliacion(usuario(), 'si pero esperate', true);
 
     expect(resultado.accion).toBe('no_entendido');
     expect(resultado).toHaveProperty('respuesta', expect.stringContaining('SI'));
@@ -199,10 +156,10 @@ describe('la confirmacion', () => {
 
   /** El tesorero tambien escribe por otras cosas. */
   it('un SI suelto sin nada esperando no hace nada', () => {
-    expect(decidirConciliacion(usuario(), si, false)).toEqual({ accion: 'nada' });
+    expect(decidirConciliacion(usuario(), 'Si', false)).toEqual({ accion: 'nada' });
   });
 
   it('un SI de alguien que no es tesorero no hace nada', () => {
-    expect(decidirConciliacion(undefined, si, true)).toEqual({ accion: 'nada' });
+    expect(decidirConciliacion(undefined, 'Si', true)).toEqual({ accion: 'nada' });
   });
 });
