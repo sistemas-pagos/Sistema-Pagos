@@ -14,6 +14,9 @@ export class MemoryPaymentStore implements PaymentStore {
   private homes = new Map<string, HomeRecord>();
   private pending = new Map<string, PendingConversation>();
   private messages = new Map<string, ProcessedMessage>();
+  /** Un recibo por pago, numerado sin repetir (invariante 10). */
+  private receipts = new Map<string, number>();
+  private nextReceipt = 1;
   private readonly now: () => Date;
 
   constructor(
@@ -44,6 +47,23 @@ export class MemoryPaymentStore implements PaymentStore {
   async updatePayment(payment: PaymentRecord): Promise<void> {
     if (!this.payments.has(payment.id)) throw new Error('payment_not_found');
     this.payments.set(payment.id, clone(payment));
+  }
+
+  /** Quien verifica no se guarda: el almacen de demo no tiene tabla de usuarios. */
+  async verifyPayment(payment: PaymentRecord): Promise<number> {
+    await this.updatePayment(payment);
+    const emitido = this.receipts.get(payment.id);
+    if (emitido !== undefined) return emitido;
+
+    const numero = this.nextReceipt;
+    this.nextReceipt += 1;
+    this.receipts.set(payment.id, numero);
+    return numero;
+  }
+
+  /** Solo para las pruebas: el numero que le toco a ese pago, si tiene. */
+  receiptFor(paymentId: string): number | undefined {
+    return this.receipts.get(paymentId);
   }
 
   async listHomes(): Promise<HomeRecord[]> {
