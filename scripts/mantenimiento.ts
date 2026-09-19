@@ -8,6 +8,7 @@
  *
  * Solo imprime cuentas: ni telefonos, ni viviendas, ni montos (invariante 12).
  */
+import { expirarIntentos } from '../src/auth/intentos.ts';
 import { createTursoClient, tursoConfigFromEnv } from '../src/storage/turso-client.ts';
 import { expirarImportaciones } from '../src/storage/conciliacion.ts';
 import { expirarContextos } from '../src/storage/mantenimiento.ts';
@@ -22,10 +23,12 @@ async function main(): Promise<void> {
 
     const contextos = await expirarContextos(client, ahora, ACTOR);
     const importaciones = await expirarImportaciones(client, ahora, ACTOR);
+    const intentos = await expirarIntentos(client, new Date(ahora));
 
     console.log(`Contextos vencidos: ${contextos.contextos}`);
     console.log(`Pagos que pasaron a revision: ${contextos.pagos}`);
     console.log(`Confirmaciones de extracto vencidas: ${importaciones}`);
+    console.log(`Bloqueos de acceso vencidos: ${intentos}`);
   } finally {
     client.close();
   }
