@@ -36,35 +36,50 @@ class PermanentError extends Error {
   }
 }
 
-const RESPUESTA_SIN_CONTEXTO = [
-  'Para registrar tu pago envía la foto del comprobante.',
-  'Si ya lo enviaste y te pedimos la vivienda, respondé con el formato E1 B4 C18',
-  '(Etapa, Bloque y Casa).',
-].join(' ');
+/**
+ * Lo primero que lee un vecino que escribe sin haber mandado nada.
+ *
+ * Una sola cosa que hacer. La version anterior explicaba ademas que responder
+ * "si ya lo enviaste y te pedimos la vivienda", que es una instruccion para un
+ * momento distinto: quien apenas saluda todavia no envio nada, y el formato de
+ * la vivienda se le explica cuando de verdad se le pregunta.
+ *
+ * No dice "foto" a proposito: el comprobante casi siempre es una captura de la
+ * app del banco, no una fotografia de un papel. Nombrar el medio equivocado
+ * hace dudar a quien tiene justo lo que hay que mandar.
+ */
+const SALUDO = '¡Hola! Enviá tu comprobante de depósito para registrarlo.';
+
+/**
+ * El mensaje venia como imagen o documento pero sin archivo que descargar.
+ * Aca no se saluda: el vecino ya mando algo y lo que necesita saber es que no
+ * llego, no un instructivo desde cero.
+ */
+const SIN_ARCHIVO = 'No pudimos abrir esa imagen. Volvé a enviar tu comprobante.';
 
 async function procesarComprobante(
   mensaje: MensajePendiente,
   store: Store,
   recognizer: ReceiptRecognizer,
 ) {
-  if (!mensaje.mediaId) throw new PermanentError(RESPUESTA_SIN_CONTEXTO, 'media_id_ausente');
+  if (!mensaje.mediaId) throw new PermanentError(SIN_ARCHIVO, 'media_id_ausente');
 
   const media = await downloadWhatsAppMedia(mensaje.mediaId);
   const mimeType = media.mimeType;
 
   if (mensaje.tipo === 'document' && mimeType === 'application/pdf') {
     throw new PermanentError(
-      'Por ahora el MVP procesa comprobantes en JPG o PNG. Envía una imagen del comprobante.',
+      'Por ahora solo podemos leer imágenes. Enviá una captura del comprobante en vez del PDF.',
       'pdf_no_soportado',
     );
   }
 
   if (mimeType !== 'image/jpeg' && mimeType !== 'image/png') {
-    throw new PermanentError('Formato no admitido. Envía el comprobante como JPG o PNG.', 'formato_no_admitido');
+    throw new PermanentError('No pudimos leer ese archivo. Enviá el comprobante como imagen.', 'formato_no_admitido');
   }
 
   if (media.size && media.size > env().MAX_RECEIPT_BYTES) {
-    throw new PermanentError('El archivo es demasiado grande para procesarlo. Envía una imagen más liviana.', 'archivo_muy_grande');
+    throw new PermanentError('Esa imagen pesa demasiado para procesarla. Enviá una más liviana.', 'archivo_muy_grande');
   }
 
   return processReceiptMessage({
@@ -139,7 +154,7 @@ async function procesarTexto(mensaje: MensajePendiente, store: Store) {
   const resultado = await processHomeReply(mensaje.messageId, mensaje.telefono, cuerpo, { store });
   // Un texto que no responde a ningun comprobante pendiente recibe instrucciones.
   if (resultado.action === 'silent' && resultado.reason === 'no_pending_receipt') {
-    return { action: 'reply' as const, reply: RESPUESTA_SIN_CONTEXTO };
+    return { action: 'reply' as const, reply: SALUDO };
   }
   return resultado;
 }
