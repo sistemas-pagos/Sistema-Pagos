@@ -1,0 +1,60 @@
+name: Cierre de mes
+
+# Cuadra un mes de servicio y lo bloquea (docs/PLAN.md, fase 7).
+#
+# Solo manual, y a proposito: cerrar es irreversible. Despues del cierre ningun
+# pago de ese mes se puede modificar (invariante 9), asi que no es algo que deba
+# dispararse solo por un cron a fin de mes — se corre cuando el tesorero ya
+# reviso lo que quedaba en revision.
+#
+# Este si lleva input, a diferencia de `usuarios`: un periodo es AAAA-MM, no es
+# un dato personal, y que quede a la vista en la pagina de la corrida no expone
+# nada. Lo que no puede ir en un input es un telefono o una vivienda.
+on:
+  workflow_dispatch:
+    inputs:
+      periodo:
+        description: 'Mes a cerrar (AAAA-MM), por ejemplo 2026-09'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Dos cierres del mismo mes en paralelo no romperian nada — la clave primaria de
+# `cierres_mes` deja pasar uno solo — pero el segundo leeria un cuadre a medio
+# hacer.
+concurrency:
+  group: cierre-mes
+  cancel-in-progress: false
+
+jobs:
+  cerrar:
+    runs-on: ubuntu-latest
+    environment: pagos-produccion
+    timeout-minutes: 10
+    env:
+      APP_MODE: production
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # El script solo imprime cuentas del mes y dos totales. Ninguna casa,
+      # ningun monto por vivienda (invariante 12).
+      - name: Cerrar el mes
+        env:
+          PAGOS_TURSO_URL: ${{ secrets.PAGOS_TURSO_URL }}
+          PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
+          PAGOS_USUARIO_ID: ${{ secrets.PAGOS_USUARIO_ID }}
+          PAGOS_PERIODO: ${{ inputs.periodo }}
+        run: npx tsx scripts/cierre-mes.ts

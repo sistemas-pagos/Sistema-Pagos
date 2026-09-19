@@ -1,7 +1,7 @@
 import type { Client, Row } from '@libsql/client';
 import { env } from '@/src/config/env';
 import type { HomeRecord, PaymentRecord, PaymentStatus, PendingConversation, ProcessedMessage } from '@/src/domain/types';
-import { codigoVivienda, emitirRecibo, enTransaccion, registrarEvento } from '@/src/storage/turso';
+import { type Executor, codigoVivienda, emitirRecibo, enTransaccion, registrarEvento } from '@/src/storage/turso';
 import type { CambioDePago, PaymentStore } from './types';
 
 /**
@@ -200,9 +200,10 @@ export class TursoPaymentStore implements PaymentStore {
     const viviendaId = await this.viviendaId(pago);
 
     await enTransaccion(this.db, async (tx) => {
-      const previo = await tx.execute({ sql: 'SELECT estado FROM pagos WHERE id = ?', args: [pago.id] });
+      const previo = await tx.execute({ sql: 'SELECT estado, periodo FROM pagos WHERE id = ?', args: [pago.id] });
       if (previo.rows.length === 0) throw new Error('payment_not_found');
       const antes = String(previo.rows[0].estado);
+      await this.asegurarMesAbierto(tx, [texto(previo.rows[0].periodo), pago.period]);
 
       await tx.execute({
         sql: `UPDATE pagos SET
@@ -226,6 +227,25 @@ export class TursoPaymentStore implements PaymentStore {
   }
 
   /**
+   * Un mes cerrado no se modifica (invariante 9).
+   *
+   * Se miran los dos periodos, el que el pago tiene y el que va a tener: si
+   * solo se mirara el nuevo, mover un pago **fuera** de un mes cerrado seria la
+   * forma de cambiarlo igual, y el cuadre de ese mes dejaria de cuadrar sin que
+   * nadie lo note.
+   */
+  private async asegurarMesAbierto(tx: Executor, periodos: readonly (string | undefined)[]): Promise<void> {
+    const aRevisar = [...new Set(periodos.filter((periodo): periodo is string => Boolean(periodo)))];
+    if (aRevisar.length === 0) return;
+
+    const { rows } = await tx.execute({
+      sql: `SELECT periodo FROM cierres_mes WHERE periodo IN (${aRevisar.map(() => '?').join(', ')})`,
+      args: aRevisar,
+    });
+    if (rows.length > 0) throw new Error('month_already_closed');
+  }
+
+  /**
    * Verifica el pago y emite su recibo en una sola transaccion (fase 4).
    *
    * Que vayan juntos no es prolijidad: si fueran dos pasos, un fallo entre
@@ -242,6 +262,9 @@ export class TursoPaymentStore implements PaymentStore {
     const verificadoEn = pago.verifiedAt ?? pago.updatedAt;
 
     return enTransaccion(this.db, async (tx) => {
+      const previo = await tx.execute({ sql: 'SELECT periodo FROM pagos WHERE id = ?', args: [pago.id] });
+      await this.asegurarMesAbierto(tx, [texto(previo.rows[0]?.periodo), pago.period]);
+
       const resultado = await tx.execute({
         sql: `UPDATE pagos SET
                 vivienda_id = ?, monto_centavos = ?, fecha_pago = ?, hora_pago = ?, banco = ?,

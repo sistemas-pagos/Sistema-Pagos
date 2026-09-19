@@ -12,7 +12,7 @@
 import type { Client, Transaction } from '@libsql/client';
 import type { MetodoPago } from '@/src/domain/types';
 
-type Executor = Pick<Client, 'execute'>;
+export type Executor = Pick<Client, 'execute'>;
 /** Un cliente abre transaccion propia; una transaccion en curso se reutiliza. */
 export type Db = Client | Transaction;
 
