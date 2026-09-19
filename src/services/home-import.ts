@@ -1,5 +1,6 @@
 import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
 import type { HomeRecord } from '@/src/domain/types';
+import { CsvPegadoError, detectarDelimitador, normalizarEncabezado, partirLinea } from '@/src/services/csv-pegado';
 
 const MAX_IMPORT_ROWS = 5_000;
 const MAX_IMPORT_CHARS = 250_000;
@@ -34,46 +35,15 @@ export class HomeImportError extends Error {
   }
 }
 
-function normalizeHeader(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_');
-}
+const normalizeHeader = normalizarEncabezado;
 
-function detectDelimiter(header: string): string {
-  if (header.includes('\t')) return '\t';
-  if (header.includes(';')) return ';';
-  return ',';
-}
-
+/** Delega en el parser compartido y traduce el error, que la ruta ya distingue. */
 function parseDelimitedLine(line: string, delimiter: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (char === '"') {
-      if (quoted && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        quoted = !quoted;
-      }
-      continue;
-    }
-    if (char === delimiter && !quoted) {
-      values.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += char;
+  try {
+    return partirLinea(line, delimiter);
+  } catch (error) {
+    throw error instanceof CsvPegadoError ? new HomeImportError(error.message) : error;
   }
-  if (quoted) throw new HomeImportError('Comillas sin cerrar en la importación.');
-  values.push(current.trim());
-  return values;
 }
 
 function parseFee(value: string | undefined, line: number): number {
@@ -116,7 +86,7 @@ export function parseHomesImport(input: string, existingHomes: readonly HomeReco
   if (lines.length < 2) throw new HomeImportError('Incluye encabezados y al menos una vivienda.');
   if (lines.length - 1 > MAX_IMPORT_ROWS) throw new HomeImportError(`Máximo ${MAX_IMPORT_ROWS} viviendas por importación.`);
 
-  const delimiter = detectDelimiter(lines[0]);
+  const delimiter = detectarDelimitador(lines[0]);
   const rawHeaders = parseDelimitedLine(lines[0], delimiter);
   const headers = rawHeaders.map((header) => {
     const normalized = normalizeHeader(header);

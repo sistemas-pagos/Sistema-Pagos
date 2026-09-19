@@ -116,6 +116,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .primary-button:focus-visible, .admin-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.admin-head-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .admin-link { color: var(--accent); text-underline-offset: 3px; }
 .house-history-table table { min-width: 980px; }
 .status-chip { display: inline-flex; align-items: center; width: max-content; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: .72rem; white-space: nowrap; }

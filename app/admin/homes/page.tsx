@@ -26,7 +26,10 @@ export default async function HomesAdminPage({ searchParams }: { searchParams: P
           <h1 style={{ fontSize: 'clamp(2rem,5vw,3.6rem)' }}>Viviendas</h1>
           <p className="lead">Etapa + bloque + casa es el identificador operativo. Ningún teléfono se usa para asignar una vivienda.</p>
         </div>
-        <Link className="primary-button" href="/admin">Volver al panel</Link>
+        <div className="admin-head-actions">
+          <Link className="admin-link" href="/admin/saldos">Saldos iniciales</Link>
+          <Link className="primary-button" href="/admin">Volver al panel</Link>
+        </div>
       </header>
 
       <section className="kpis" style={{ marginTop: 28 }}>
