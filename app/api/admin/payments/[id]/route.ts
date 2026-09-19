@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import { isAdminAuthenticated, isSameOriginRequest } from '@/src/auth/guard';
 import { isPeriod } from '@/src/domain/periods';
+import type { PaymentRecord } from '@/src/domain/types';
 import { buildManualVerificationUpdate } from '@/src/services/manual-verification';
+import {
+  construirNoEncontrado,
+  construirRechazo,
+  estadoTrasCambiarVivienda,
+  puedeCambiarDeVivienda,
+  puedeMarcarseSinRespaldo,
+  puedeRechazarse,
+} from '@/src/services/acciones-panel';
 import { assignServicePeriod, hasPeriodConflict } from '@/src/services/period-assignment';
 import { getPaymentStore } from '@/src/storage';
 import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
@@ -36,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     };
 
     if (hasPeriodConflict(updated, allPayments)) {
-      updated = { ...updated, status: 'EN_REVISION' as const, reviewReason: 'service_period_already_has_payment' };
+      updated = { ...updated, status: 'EN_REVISION', reviewReason: 'service_period_already_has_payment' };
     }
 
     await store.updatePayment(updated);
@@ -67,7 +76,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
   }
 
+  if (action === 'reject') {
+    const motivo = String(form.get('reason') ?? '').trim();
+    if (!motivo) return new NextResponse('Rejection reason is required', { status: 400 });
+    if (!puedeRechazarse(payment)) return new NextResponse('Payment cannot be closed from its current state', { status: 409 });
+
+    await store.updatePayment(construirRechazo(payment, motivo, new Date()));
+    // Cerrar el caso cierra tambien la conversacion: si no, la respuesta que el
+    // vecino mande despues revive el pago rechazado y le reserva el mes otra vez.
+    await store.clearPending(payment.phone);
+    return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
+  }
+
+  if (action === 'mark-not-found') {
+    if (!puedeMarcarseSinRespaldo(payment)) return new NextResponse('Payment cannot be closed from its current state', { status: 409 });
+
+    await store.updatePayment(construirNoEncontrado(payment, new Date()));
+    await store.clearPending(payment.phone);
+    return NextResponse.redirect(new URL(`/admin?period=${encodeURIComponent(returnPeriod)}`, request.url), 303);
+  }
+
   if (action === 'assign-home') {
+    // H8: sin esto, reasignar la casa de un DUPLICADO lo dejaba en
+    // PENDIENTE_VERIFICACION y desde ahi se podia verificar y emitir recibo por
+    // plata que entro una sola vez.
+    if (!puedeCambiarDeVivienda(payment)) {
+      return new NextResponse('Payment cannot change home from its current state', { status: 409 });
+    }
+
     const stage = normalizeHomePart(String(form.get('stage') ?? ''));
     const block = normalizeHomePart(String(form.get('block') ?? ''));
     const house = normalizeHomePart(String(form.get('house') ?? ''));
@@ -84,19 +120,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const home = known;
     const newPeriod = assignServicePeriod(home, payment.transactionDate, allPayments, new Date(), payment.id);
     const reviewReason = payment.reviewReason === 'receipt_home_not_in_master' ? undefined : payment.reviewReason;
-    let updated = {
+    let updated: PaymentRecord = {
       ...payment,
       stage,
       block,
       house,
       period: newPeriod,
-      status: reviewReason ? 'EN_REVISION' as const : 'PENDIENTE_VERIFICACION' as const,
+      status: estadoTrasCambiarVivienda(payment, reviewReason),
       reviewReason,
       updatedAt: new Date().toISOString(),
     };
 
     if (hasPeriodConflict(updated, allPayments) && !updated.reviewReason) {
-      updated = { ...updated, status: 'EN_REVISION' as const, reviewReason: 'service_period_already_has_payment' };
+      updated = { ...updated, status: 'EN_REVISION', reviewReason: 'service_period_already_has_payment' };
     }
 
     await store.updatePayment(updated);
