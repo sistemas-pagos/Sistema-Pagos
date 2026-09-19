@@ -16,6 +16,8 @@ export interface ReconciliationSummary {
   verified: number;
   notFound: number;
   review: number;
+  /** Recibos emitidos en esta corrida. Uno por pago verificado (invariante 10). */
+  receipts: number;
 }
 
 function normalized(value: string): string {
@@ -153,20 +155,31 @@ export function planReconciliation(
   return { decisions, unclaimedMovements };
 }
 
+/**
+ * Aplica el plan: verifica, emite los recibos y cierra los que no cuadran.
+ *
+ * `verifiedBy` es el `usuarios.id` de quien mando el extracto. Queda en el pago
+ * y en el evento: cuando alguien pregunte por que un pago quedo verificado, eso
+ * es lo que lo responde.
+ */
 export async function reconcilePendingPayments(
   store: PaymentStore,
   movements: readonly BankMovement[],
   source: string,
   now = new Date(),
+  verifiedBy?: string,
 ): Promise<ReconciliationSummary> {
-  const summary: ReconciliationSummary = { verified: 0, notFound: 0, review: 0 };
+  const summary: ReconciliationSummary = { verified: 0, notFound: 0, review: 0, receipts: 0 };
   const { decisions } = planReconciliation(await store.listPayments(), movements);
 
   for (const decision of decisions) {
     const { payment } = decision;
-    let updated: PaymentRecord;
+
     if (decision.outcome === 'verify') {
-      updated = {
+      // Verificar y emitir el recibo van juntos: el vecino que pago tiene que
+      // recibir su comprobante, y un pago verificado sin recibo no se le nota
+      // a nadie desde el tablero.
+      await store.verifyPayment({
         ...payment,
         status: 'VERIFICADO',
         reviewReason: undefined,
@@ -174,9 +187,14 @@ export async function reconcilePendingPayments(
         verifiedAt: now.toISOString(),
         bankMovementId: decision.movementId,
         updatedAt: now.toISOString(),
-      };
+      }, verifiedBy);
       summary.verified += 1;
-    } else if (decision.outcome === 'not_found') {
+      summary.receipts += 1;
+      continue;
+    }
+
+    let updated: PaymentRecord;
+    if (decision.outcome === 'not_found') {
       updated = { ...payment, status: 'NO_ENCONTRADO', reviewReason: decision.reason, updatedAt: now.toISOString() };
       summary.notFound += 1;
     } else {

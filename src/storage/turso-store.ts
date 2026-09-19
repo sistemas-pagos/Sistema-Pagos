@@ -1,7 +1,7 @@
 import type { Client, Row } from '@libsql/client';
 import { env } from '@/src/config/env';
 import type { HomeRecord, PaymentRecord, PaymentStatus, PendingConversation, ProcessedMessage } from '@/src/domain/types';
-import { codigoVivienda } from '@/src/storage/turso';
+import { codigoVivienda, emitirRecibo, enTransaccion, registrarEvento } from '@/src/storage/turso';
 import type { PaymentStore } from './types';
 
 /**
@@ -201,6 +201,54 @@ export class TursoPaymentStore implements PaymentStore {
       args: [...this.argumentosDePago(pago, await this.viviendaId(pago)), pago.updatedAt, pago.id] as never[],
     });
     if (resultado.rowsAffected === 0) throw new Error('payment_not_found');
+  }
+
+  /**
+   * Verifica el pago y emite su recibo en una sola transaccion (fase 4).
+   *
+   * Que vayan juntos no es prolijidad: si fueran dos pasos, un fallo entre
+   * medio dejaria un pago verificado sin recibo. El vecino pago, el sistema lo
+   * sabe, y nunca le llega nada — y desde el tablero ese pago se ve perfecto,
+   * asi que nadie se entera.
+   *
+   * `pago_meses` pasa de RESERVADO a PAGADO en la misma transaccion: el mes
+   * deja de estar apartado y queda cobrado (invariante 5).
+   */
+  async verifyPayment(pago: PaymentRecord, verifiedBy?: string): Promise<number> {
+    const viviendaId = await this.viviendaId(pago);
+    const actor = verifiedBy ?? pago.verificationSource ?? 'sistema';
+    const verificadoEn = pago.verifiedAt ?? pago.updatedAt;
+
+    return enTransaccion(this.db, async (tx) => {
+      const resultado = await tx.execute({
+        sql: `UPDATE pagos SET
+                vivienda_id = ?, monto_centavos = ?, fecha_pago = ?, hora_pago = ?, banco = ?,
+                referencia = ?, depositante = ?, beneficiario = ?, cuenta_ultimos4 = ?, detalle = ?,
+                estado = ?, periodo = ?, motivo_revision = ?, telefono_contacto = ?, archivo_sha256 = ?,
+                duplicado_de = ?, duplicado_motivo = ?, verificacion_origen = ?, verificado_en = ?,
+                movimiento_id = ?, verificado_por = ?, actualizado_en = ?
+              WHERE id = ?`,
+        args: [...this.argumentosDePago(pago, viviendaId), verifiedBy ?? null, pago.updatedAt, pago.id] as never[],
+      });
+      if (resultado.rowsAffected === 0) throw new Error('payment_not_found');
+
+      await tx.execute({
+        sql: "UPDATE pago_meses SET estado = 'PAGADO' WHERE pago_id = ? AND estado = 'RESERVADO'",
+        args: [pago.id],
+      });
+
+      await registrarEvento(tx, {
+        entidad: 'pagos', entidadId: pago.id, accion: 'VERIFICAR',
+        despues: { estado: 'VERIFICADO' }, actor,
+      }, verificadoEn);
+
+      return emitirRecibo(tx, {
+        pagoId: pago.id,
+        emitidoEn: verificadoEn,
+        actor,
+        plantilla: env().WHATSAPP_TEMPLATE_RECIBO,
+      });
+    });
   }
 
   async listHomes(): Promise<HomeRecord[]> {
