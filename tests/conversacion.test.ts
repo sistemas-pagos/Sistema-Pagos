@@ -219,7 +219,7 @@ describe('cuando el vecino contesta tarde', () => {
     await comprobanteSinVivienda(store);
     await store.clearPending(TELEFONO);
     const pago = (await store.listPayments())[0];
-    await store.updatePayment({ ...pago, status: 'EN_REVISION', reviewReason: 'home_reply_timeout' });
+    await store.updatePayment({ ...pago, status: 'EN_REVISION', reviewReason: 'home_reply_timeout' }, { actor: 'prueba' });
 
     const resultado = await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
 
@@ -236,7 +236,7 @@ describe('cuando el vecino contesta tarde', () => {
     await comprobanteSinVivienda(store);
     await store.clearPending(TELEFONO);
     const pago = (await store.listPayments())[0];
-    await store.updatePayment({ ...pago, status: 'EN_REVISION', reviewReason: 'amount_above_expected' });
+    await store.updatePayment({ ...pago, status: 'EN_REVISION', reviewReason: 'amount_above_expected' }, { actor: 'prueba' });
 
     const resultado = await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
 

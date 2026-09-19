@@ -1,10 +1,31 @@
 import type { HomeRecord, PaymentRecord, PendingConversation, ProcessedMessage } from '@/src/domain/types';
 
+/** Quien cambio un pago y por que. Va a `eventos`, que no se edita ni se borra. */
+export interface CambioDePago {
+  /**
+   * `usuarios.id` cuando se sabe; si no, de donde vino el cambio: `panel`,
+   * `whatsapp`, `extracto-bac`. Hoy el panel entra con una sola clave
+   * compartida, asi que no hay persona que registrar — eso llega con el
+   * usuario por persona de la fase 7.
+   */
+  actor: string;
+  motivo?: string;
+}
+
 export interface PaymentStore {
   listPayments(): Promise<PaymentRecord[]>;
   getPayment(id: string): Promise<PaymentRecord | undefined>;
   savePayment(payment: PaymentRecord): Promise<void>;
-  updatePayment(payment: PaymentRecord): Promise<void>;
+  /**
+   * Cambia el pago y deja constancia de quien y por que (invariante 8).
+   *
+   * `cambio` es obligatorio a proposito. Era opcional en la practica —no
+   * existia— y el resultado fue que ni las acciones del panel ni la
+   * conciliacion dejaban rastro: el motivo que una persona escribia al
+   * rechazar un pago vivia en una columna que la siguiente verificacion
+   * borraba. Lo que se puede olvidar, se olvida; el tipo lo pide ahora.
+   */
+  updatePayment(payment: PaymentRecord, cambio: CambioDePago): Promise<void>;
   /**
    * Guarda el pago verificado y emite su recibo **en la misma operacion**.
    *

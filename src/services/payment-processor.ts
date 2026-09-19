@@ -468,7 +468,7 @@ export async function processHomeReply(messageId: string, phone: string, body: s
     updated = { ...updated, status: 'EN_REVISION', reviewReason: 'service_period_already_has_payment' };
   }
 
-  await store.updatePayment(updated);
+  await store.updatePayment(updated, { actor: 'whatsapp', motivo: 'vivienda_identificada' });
   await store.clearPending(phone);
   await markMessage(store, messageId, 'text', 'processed', at);
 
@@ -509,7 +509,7 @@ async function respuestaQueNoSirvio(
       status: 'EN_REVISION',
       reviewReason: 'home_reply_attempts_exhausted',
       updatedAt: at,
-    });
+    }, { actor: 'sistema', motivo: 'home_reply_attempts_exhausted' });
   }
 
   return {

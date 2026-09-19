@@ -201,7 +201,7 @@ export async function reconcilePendingPayments(
       updated = { ...payment, status: 'EN_REVISION', reviewReason: decision.reason, updatedAt: now.toISOString() };
       summary.review += 1;
     }
-    await store.updatePayment(updated);
+    await store.updatePayment(updated, { actor: verifiedBy ?? source, motivo: decision.reason });
   }
 
   return summary;
