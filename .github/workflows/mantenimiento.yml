@@ -1,0 +1,52 @@
+name: Mantenimiento
+
+# Cierra lo que quedo esperando y no va a resolverse solo: contextos de
+# conversacion vencidos y confirmaciones de extracto que nadie contesto
+# (docs/PLAN.md, seccion 5).
+#
+# Diario y no mas seguido a proposito: nada de esto es urgente. Un contexto
+# vencido ya no le responde a nadie, y una confirmacion vencida no se puede
+# aplicar. Lo que el barrido cambia es que el caso **aparezca**, en vez de
+# quedarse quieto sin que ninguna pantalla lo muestre.
+on:
+  schedule:
+    - cron: '30 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Dos corridas en paralelo tomarian el mismo contexto vencido. Los UPDATE van
+# condicionados al estado anterior, asi que no romperian nada, pero contarian
+# dos veces lo mismo.
+concurrency:
+  group: mantenimiento
+  cancel-in-progress: false
+
+jobs:
+  barrer:
+    runs-on: ubuntu-latest
+    environment: pagos-produccion
+    timeout-minutes: 10
+    env:
+      APP_MODE: production
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # El script solo imprime cuentas. Nunca telefonos, viviendas ni montos.
+      - name: Barrer lo vencido
+        env:
+          PAGOS_TURSO_URL: ${{ secrets.PAGOS_TURSO_URL }}
+          PAGOS_TURSO_TOKEN: ${{ secrets.PAGOS_TURSO_TOKEN }}
+        run: npx tsx scripts/mantenimiento.ts
