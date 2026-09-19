@@ -78,7 +78,7 @@ const MAX_INTENTOS_VIVIENDA = 3;
 function fotoIlegibleReply(motivo = 'No logramos leer el comprobante.'): string {
   return [
     `📸 ${motivo} No quedó registrado ningún pago.`,
-    'Volvé a tomar la foto de cerca, con buena luz, y que se lean el monto y el número de referencia.',
+    'Volvé a enviarlo completo y sin recortar, que se lean el monto y el número de referencia.',
   ].join('\n');
 }
 
@@ -143,7 +143,7 @@ function aRevisionHumanaReply(): string {
 }
 
 function reviewReply(): string {
-  return 'Recibimos tu comprobante y quedó en revisión. No se registrará como pago verificado hasta confirmar la transacción.';
+  return 'Recibimos tu comprobante y lo estamos revisando. Te avisamos en cuanto quede confirmado contra el estado de cuenta del banco.';
 }
 
 function duplicateReply(): string {
