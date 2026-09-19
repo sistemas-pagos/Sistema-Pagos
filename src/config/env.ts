@@ -44,6 +44,10 @@ const envSchema = z.object({
   // nombre tiene que coincidir con el aprobado; si no, Meta rechaza el envio.
   WHATSAPP_TEMPLATE_RECIBO: z.preprocess(enBlancoEsAusente, z.string().trim().min(1).default('recibo_pago')),
   WHATSAPP_TEMPLATE_IDIOMA: z.preprocess(enBlancoEsAusente, z.string().trim().min(2).default('es')),
+  // Cuanto vive la confirmacion del extracto. Dos horas: el tesorero manda el
+  // archivo y se va a hacer otra cosa, pero un "SI" de mañana aplicaria un
+  // extracto contra pagos que ya cambiaron.
+  PAGOS_CONFIRMACION_MINUTOS: z.preprocess(enBlancoEsAusente, z.coerce.number().int().positive().max(48 * 60).default(120)),
   EXPECTED_BENEFICIARY: optionalString,
   EXPECTED_ACCOUNT_LAST4: optionalLast4,
   // Turso: fuente de verdad del registro de mensajes (fase 1 en adelante).

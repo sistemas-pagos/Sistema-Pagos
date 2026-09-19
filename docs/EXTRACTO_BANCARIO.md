@@ -136,6 +136,32 @@ lo vio primero.
 Una confirmación vencida **no se puede aplicar** — sería un extracto de hace un mes contra
 pagos que ya cambiaron —, pero sí se puede cancelar.
 
+## El hilo por WhatsApp
+
+```
+El tesorero manda el CSV  →  se lee, se guarda y se resume
+                          →  «Se verificarían: 9 pagos …  Respondé SI»
+        "SI"              →  se verifican y salen los recibos
+        "NO" o nada       →  se descarta o vence
+```
+
+**Quién decide si un documento es un extracto es el parser**, no el nombre del archivo ni el
+tipo que declara WhatsApp: esos los pone quien lo manda. Si no es un extracto, el mensaje
+sigue por el camino del comprobante — el tesorero también es vecino y puede estar mandando
+su propio pago.
+
+Que el archivo **no cuadre** sí es asunto suyo: ahí el archivo era del banco, y se lo dice.
+
+El resumen se calcula contra **todos los movimientos que la base conoce**, no solo los del
+archivo recién subido. Un comprobante puede corresponder a un depósito que llegó en un
+extracto anterior y entonces no tenía comprobante; conciliar solo contra el último archivo lo
+dejaría sin verificar para siempre. Y como el «SI» aplica contra ese mismo conjunto, lo que
+se muestra es lo que se aplica.
+
+La confirmación vive **dos horas** (`PAGOS_CONFIRMACION_MINUTOS`). El tesorero manda el
+archivo y se va a hacer otra cosa; pero un «SI» de mañana aplicaría un extracto contra pagos
+que ya cambiaron.
+
 ## Lo que todavía no se sabe
 
 El archivo que sirvió de modelo es el de una cuenta personal, compartido **solo para ver la

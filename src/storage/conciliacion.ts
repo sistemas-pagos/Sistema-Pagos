@@ -1,3 +1,5 @@
+import { BANCO_BAC } from '@/src/bank/bac-csv';
+import type { BankMovement } from '@/src/services/reconciliation';
 import { type Db, enTransaccion, registrarEvento } from '@/src/storage/turso';
 
 /**
@@ -90,6 +92,28 @@ export async function registrarImportacion(
 
     return { registrada: true, nuevos, repetidos: entrada.movimientos.length - nuevos };
   });
+}
+
+/**
+ * Todos los movimientos que la base conoce, no solo los de la ultima
+ * importacion.
+ *
+ * Es a proposito: un comprobante puede corresponder a un deposito que llego en
+ * un extracto anterior y entonces no tenia comprobante. Conciliar solo contra
+ * el archivo recien subido lo dejaria sin verificar para siempre.
+ */
+export async function movimientosDeBanco(db: Db): Promise<BankMovement[]> {
+  const { rows } = await db.execute(
+    'SELECT id, fecha, referencia, monto_centavos FROM movimientos_banco ORDER BY fecha',
+  );
+
+  return rows.map((fila) => ({
+    id: String(fila.id),
+    bank: BANCO_BAC,
+    reference: String(fila.referencia ?? ''),
+    amount: Number(fila.monto_centavos) / 100,
+    transactionDate: String(fila.fecha),
+  }));
 }
 
 export interface ImportacionPendiente {
