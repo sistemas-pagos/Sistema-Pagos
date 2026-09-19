@@ -154,3 +154,27 @@ export async function usuarioPorTelefono(db: Db, telefono: string): Promise<Usua
 export function puedeConciliar(usuario: Usuario | undefined): usuario is Usuario {
   return usuario !== undefined && (usuario.rol === 'ADMIN' || usuario.rol === 'TESORERO');
 }
+
+/**
+ * Un usuario al que atribuirle lo que se hace desde el panel.
+ *
+ * El panel todavia entra con una clave compartida, asi que no sabe quien es la
+ * persona (eso es lo que falta de la fase 7). Pero `ajustes.creado_por` es una
+ * clave foranea a `usuarios`, y dejar ese campo apuntando a alguien que existe
+ * es mejor que inventar un id: cuando el panel tenga usuario por persona, lo
+ * unico que cambia es de donde sale este valor.
+ *
+ * Prefiere ADMIN sobre TESORERO y no devuelve cobradores: un cobrador no carga
+ * saldos.
+ */
+export async function usuarioResponsable(db: Db): Promise<Usuario | undefined> {
+  const { rows } = await db.execute(`
+    SELECT id, nombre, rol FROM usuarios
+    WHERE activo = 1 AND rol IN ('ADMIN', 'TESORERO')
+    ORDER BY CASE rol WHEN 'ADMIN' THEN 0 ELSE 1 END, id
+    LIMIT 1`);
+
+  const fila = rows[0];
+  if (!fila) return undefined;
+  return { id: String(fila.id), nombre: String(fila.nombre), rol: String(fila.rol) as RolUsuario, activo: true };
+}
