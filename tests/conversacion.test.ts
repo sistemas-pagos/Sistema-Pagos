@@ -190,3 +190,102 @@ describe('cuando la foto no se puede leer', () => {
     expect(await store.listPayments()).toHaveLength(1);
   });
 });
+
+describe('cuando el vecino contesta tarde', () => {
+  /**
+   * El contexto vence a los 30 minutos, pero el pago sigue sin vivienda mucho
+   * despues. Antes, el vecino que contestaba a las dos horas —con la casa
+   * correcta— recibia instrucciones genericas y su respuesta se tiraba.
+   *
+   * Vencer el contexto significa dejar de preguntar, no dejar de escuchar.
+   */
+  const dosHorasDespues = () => new Date('2026-09-08T20:00:00.000Z');
+
+  it('toma la respuesta aunque el contexto ya haya vencido', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+    await comprobanteSinVivienda(store);
+    await store.clearPending(TELEFONO);
+
+    const resultado = await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
+
+    expect(resultado.status).toBe('PENDIENTE_VERIFICACION');
+    const pago = (await store.listPayments())[0];
+    expect([pago.stage, pago.block, pago.house]).toEqual(['1', '4', '18']);
+  });
+
+  /** Aunque el barrido diario ya lo haya mandado a revision por no contestar. */
+  it('rescata un pago que el barrido ya habia mandado a revision', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+    await comprobanteSinVivienda(store);
+    await store.clearPending(TELEFONO);
+    const pago = (await store.listPayments())[0];
+    await store.updatePayment({ ...pago, status: 'EN_REVISION', reviewReason: 'home_reply_timeout' });
+
+    const resultado = await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
+
+    expect(resultado.status).toBe('PENDIENTE_VERIFICACION');
+    expect((await store.listPayments())[0].reviewReason).toBeUndefined();
+  });
+
+  /**
+   * Decir de que casa es no arregla un monto que no cuadra. Se guarda la
+   * vivienda, que es informacion util, y el pago sigue esperando a una persona.
+   */
+  it('llena la vivienda pero no saca de revision un pago con otro problema', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+    await comprobanteSinVivienda(store);
+    await store.clearPending(TELEFONO);
+    const pago = (await store.listPayments())[0];
+    await store.updatePayment({ ...pago, status: 'EN_REVISION', reviewReason: 'amount_above_expected' });
+
+    const resultado = await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
+
+    expect(resultado.status).toBe('EN_REVISION');
+    const actualizado = (await store.listPayments())[0];
+    expect(actualizado.stage).toBe('1');
+    expect(actualizado.reviewReason).toBe('amount_above_expected');
+  });
+
+  /** Un pago ya verificado no se toca: ese vecino no esta contestando nada. */
+  it('no toca un pago que ya tiene vivienda', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+    await comprobanteSinVivienda(store);
+    await processHomeReply('r1', TELEFONO, 'E1 B4 C18', { store, now });
+
+    const resultado = await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
+
+    expect(resultado.action).toBe('silent');
+    expect(resultado.reason).toBe('no_pending_receipt');
+  });
+
+  /** Sin contexto no hay intentos que gastar: se responde y se deja como esta. */
+  it('no gasta intentos con una respuesta tardia que no se entiende', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+    await comprobanteSinVivienda(store);
+    await store.clearPending(TELEFONO);
+
+    const resultado = await processHomeReply('tarde', TELEFONO, 'no sé', { store, now: dosHorasDespues });
+
+    expect(resultado.reason).toBe('invalid_home_reply');
+    expect((await store.listPayments())[0].status).toBe('ESPERANDO_RESPUESTA');
+  });
+
+  /** Si tiene dos sin vivienda, la respuesta va al mas reciente. */
+  it('aplica la respuesta al ultimo comprobante que mando', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+    await comprobanteSinVivienda(store, 'msg-viejo');
+    await store.clearPending(TELEFONO);
+    await processReceiptMessage({
+      messageId: 'msg-nuevo', phone: TELEFONO, bytes: png(9), declaredMime: 'image/png', syntheticOcrText: SIN_VIVIENDA,
+    }, { store, now: dosHorasDespues });
+    await store.clearPending(TELEFONO);
+
+    await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
+
+    const pagos = await store.listPayments();
+    const nuevo = pagos.find((pago) => pago.sourceMessageId === 'msg-nuevo');
+    const viejo = pagos.find((pago) => pago.sourceMessageId === 'msg-viejo');
+    expect(nuevo?.stage).toBe('1');
+    expect(viejo?.stage).toBeUndefined();
+  });
+});
