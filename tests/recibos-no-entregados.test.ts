@@ -18,8 +18,8 @@ import {
 const ALTA = '2026-09-01T00:00:00.000Z';
 const TELEFONO = '+50433330000';
 const AHORA = new Date('2026-09-20T12:00:00.000Z');
-/** Mas de una hora antes de AHORA: ya no es espera normal del cron. */
-const VIEJO = '2026-09-20T09:00:00.000Z';
+/** Mas de seis horas antes de AHORA: ya no es espera normal del cron. */
+const VIEJO = '2026-09-20T02:00:00.000Z';
 
 let db: Client;
 
@@ -115,6 +115,18 @@ describe('los recibos que no llegaron', () => {
   });
 
   /**
+   * El cron pide cada quince minutos pero corre cada ~2 horas: GitHub retrasa
+   * el schedule. Un envio de hace tres horas todavia puede estar esperando su corrida, y
+   * marcarlo seria una alarma falsa en cada recibo que se emite.
+   */
+  it('dos horas de espera no son una alarma: el cron no corre cada quince minutos', async () => {
+    await reciboEmitido('p1', 'mov1');
+    await db.execute("UPDATE envios SET actualizado_en = '2026-09-20T09:00:00.000Z'");
+
+    expect(await recibosNoEntregados(db, AHORA)).toEqual([]);
+  });
+
+  /**
    * Un recibo anulado se reemplazo por otro a proposito (invariante 10). Su
    * envio nunca va a salir, y listarlo como "no entregado" seria una alarma
    * falsa que compite con las de verdad.
@@ -134,8 +146,8 @@ describe('los recibos que no llegaron', () => {
   it('lo mas viejo sale primero, que es lo que lleva mas tiempo sin llegar', async () => {
     const primero = await reciboEmitido('p1', 'mov1', { codigoCasa: '18' });
     const segundo = await reciboEmitido('p2', 'mov2', { codigoCasa: '19' });
-    await envejecerEnvio(primero, '2026-09-20T08:00:00.000Z');
-    await envejecerEnvio(segundo, '2026-09-20T06:00:00.000Z');
+    await envejecerEnvio(primero, '2026-09-20T04:00:00.000Z');
+    await envejecerEnvio(segundo, '2026-09-20T02:00:00.000Z');
 
     const orden = (await recibosNoEntregados(db, AHORA)).map((fila) => fila.reciboNumero);
     expect(orden).toEqual([segundo, primero]);

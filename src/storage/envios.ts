@@ -19,9 +19,19 @@ import type { Client } from '@libsql/client';
  *   ninguna senal de que algo ande mal.
  */
 
-/** Un PENDIENTE recien creado es normal: espera la proxima corrida del cron,
- *  que es cada quince minutos. Una hora sin moverse ya no es espera. */
-export const MINUTOS_PARA_ATASCADO = 60;
+/**
+ * Cuanto puede estar un envio en PENDIENTE antes de que sea una senal.
+ *
+ * El cron pide cada quince minutos, pero **no corre asi**. Medido sobre las
+ * corridas reales de `enviar-recibos`, los huecos son de ~2 horas: el
+ * `schedule` de GitHub Actions es best-effort y se retrasa cuando la cola de
+ * runners esta cargada. Un umbral de una hora marcaria como atascado a todos
+ * los envios normales, y una pantalla que siempre alarma no la mira nadie.
+ *
+ * Seis horas son unas tres corridas perdidas. Lo que de verdad responde rapido
+ * es el encadenamiento con `Procesar comprobantes`, no el cron.
+ */
+export const MINUTOS_PARA_ATASCADO = 360;
 
 export type MotivoNoEntregado = 'FALLIDO' | 'ATASCADO';
 
