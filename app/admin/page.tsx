@@ -82,6 +82,7 @@ export default async function AdminPage({
         <div><p className="eyebrow">Panel administrativo</p><h1 style={{ fontSize: 'clamp(2rem,5vw,3.6rem)' }}>Cobranza residencial</h1></div>
         <div className="admin-head-actions">
           <Link className="primary-button" href="/admin/homes">Gestionar viviendas</Link>
+          <Link className="primary-button" href="/admin/recibos">Recibos no entregados</Link>
           <form method="post" action="/api/admin/logout"><button className="scenario-button" type="submit">Cerrar sesión</button></form>
         </div>
       </header>
