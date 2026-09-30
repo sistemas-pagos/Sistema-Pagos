@@ -5,6 +5,10 @@ name: Enviar recibos
 # un envio que falla por red queda PENDIENTE y solo lo reintenta una corrida
 # posterior, asi que sin cron un recibo podria quedarse en la cola para siempre.
 on:
+  # Un cobro en efectivo pide el envio en el momento: el recibo digital es lo
+  # unico que el vecino recibe, y el cron real corre cada ~2 horas.
+  repository_dispatch:
+    types: [enviar-recibos]
   workflow_run:
     workflows: ['Procesar comprobantes']
     types: [completed]

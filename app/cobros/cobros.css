@@ -1,0 +1,265 @@
+/*
+ * La pantalla del cobrador, pensada para un telefono en la calle.
+ *
+ * El panel de admin es trabajo de escritorio: tablas anchas, sentado. Esto es
+ * lo contrario — una mano, sol de frente, y la prisa de alguien esperando en
+ * la puerta. Por eso vive en su propio archivo y no hereda nada del panel:
+ * adaptar una tabla de once columnas a un telefono es peor que empezar de
+ * cero.
+ *
+ * Cada zona tocable mide 44 px o mas, que es lo que un dedo acierta sin mirar.
+ */
+
+.cob {
+  --fondo: #08120f;
+  --tarjeta: #0e1d18;
+  --linea: #1c3229;
+  --borde: #2a473c;
+  --texto: #e6f2ed;
+  --apagado: #9db5ac;
+  --menta: #6fe3b0;
+  --sobre-menta: #06231a;
+  --aviso: #e8b75b;
+  --aviso-fondo: #2a2113;
+
+  min-height: 100dvh;
+  background: var(--fondo);
+  color: var(--texto);
+  padding: 16px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cob__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cob__eyebrow {
+  margin: 0 0 2px;
+  font-size: .7rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--menta);
+  font-weight: 600;
+}
+
+.cob__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 7vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+}
+
+.cob__quien {
+  font-size: .8rem;
+  color: var(--apagado);
+  margin: 4px 0 0;
+}
+
+.cob__card {
+  background: var(--tarjeta);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* Dos por fila en el telefono; el dedo llega a todas sin estirarse. */
+.cob__filtros {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cob__campo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cob__campo--ancho { grid-column: 1 / -1; }
+
+.cob__campo label {
+  font-size: .75rem;
+  color: var(--apagado);
+  font-weight: 500;
+}
+
+.cob__campo select,
+.cob__campo input,
+.cob__campo textarea {
+  background: var(--fondo);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 12px;
+  /* 16px exactos: menos que eso y iOS hace zoom solo al enfocar el campo. */
+  font-size: 16px;
+  font-family: inherit;
+  min-height: 44px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cob__campo textarea { resize: vertical; min-height: 96px; }
+
+.cob__acciones { display: flex; gap: 10px; margin-top: 14px; }
+
+.cob__boton,
+.cob__boton:visited {
+  flex: 1 1 auto;
+  background: var(--menta);
+  color: var(--sobre-menta);
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  min-height: 48px;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cob__boton--aviso { background: var(--aviso); color: #241b08; }
+
+.cob__boton--plano,
+.cob__boton--plano:visited {
+  background: transparent;
+  color: var(--apagado);
+  border: 1px solid var(--borde);
+  flex: 0 0 auto;
+}
+
+.cob__conteo {
+  font-size: .85rem;
+  color: var(--apagado);
+  margin: 0;
+}
+
+/* Cada casa es una tarjeta tocable, no una fila de tabla. */
+.cob__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.cob__casa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--tarjeta);
+  border: 1px solid var(--linea);
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-height: 60px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.cob__casa:active { border-color: var(--menta); }
+
+.cob__codigo {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+}
+
+.cob__meta { font-size: .8rem; color: var(--apagado); margin: 3px 0 0; }
+
+.cob__chip {
+  display: inline-block;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cob__chip--pendiente { background: var(--aviso-fondo); color: var(--aviso); }
+.cob__chip--pagado { background: #10352a; color: var(--menta); }
+.cob__chip--verificar { background: #14293d; color: #7fb6e8; }
+.cob__chip--revision { background: #34211f; color: #e89b8b; }
+
+.cob__nota {
+  background: #10352a;
+  border: 1px solid #1f5240;
+  border-radius: 12px;
+  padding: 13px 15px;
+  font-size: .92rem;
+  line-height: 1.5;
+}
+
+.cob__nota--aviso { background: var(--aviso-fondo); border-color: #4a3a1c; }
+
+.cob__mes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 13px 15px;
+  min-height: 52px;
+}
+
+.cob__mes input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--menta);
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.cob__mes label { flex: 1 1 auto; font-size: 1rem; }
+.cob__mes--tomado { opacity: .55; }
+
+.cob__precio { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.cob__total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #122a22;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+}
+
+.cob__total strong { font-size: 1.75rem; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+
+.cob__recibo {
+  background: #122a22;
+  border: 2px solid var(--menta);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+.cob__recibo b {
+  display: block;
+  font-size: clamp(2.5rem, 14vw, 3.4rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  letter-spacing: .02em;
+}
+
+.cob__consiente { display: flex; gap: 11px; align-items: flex-start; margin-top: 12px; }
+.cob__consiente input { width: 22px; height: 22px; accent-color: var(--menta); flex-shrink: 0; margin: 1px 0 0; }
+.cob__consiente label { font-size: .92rem; line-height: 1.45; }
+
+.cob__error {
+  background: #34211f;
+  border: 1px solid #5c3a34;
+  border-radius: 12px;
+  padding: 13px 15px;
+  font-size: .92rem;
+}
+
+/* En pantalla grande no se estira: una columna angosta se lee mejor. */
+@media (min-width: 640px) {
+  .cob { padding: 28px; max-width: 720px; margin: 0 auto; }
+  .cob__filtros { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
