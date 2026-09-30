@@ -1,7 +1,7 @@
 import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTOR, PLANTILLA, contar, nuevaBaseDePrueba } from './helpers/turso-test-db';
-import { cerrarCaja } from '@/src/storage/cierre-caja';
+import { cajasPendientes, cerrarCaja, cobrosSinEntregar } from '@/src/storage/cierre-caja';
 import { cobradoSinEntregar, registrarCobroEnEfectivo, registrarCobroEnRevision } from '@/src/storage/efectivo';
 import { dejarNota, notasAbiertas, resolverNota } from '@/src/storage/notas';
 import { crearVivienda } from '@/src/storage/turso';
@@ -183,5 +183,78 @@ describe('las notas del cobrador', () => {
     await dejarNota(db, { id: 'n1', pagoId: 'p1', autorId: 'u-cobrador', texto: 'vieja', creadaEn: EN });
 
     expect((await notasAbiertas(db)).map((nota) => nota.id)).toEqual(['n1', 'n2']);
+  });
+});
+
+describe('lo que el tesorero ve antes de contar', () => {
+  const cierre = {
+    id: 'cc-1', cobradorId: 'u-cobrador', tesoreroId: 'u-tesorero',
+    montoEsperadoCentavos: 15_000, montoEntregadoCentavos: 15_000, creadoEn: EN,
+  };
+
+  it('la caja pendiente trae el nombre, el total y lo que esta en revision', async () => {
+    await unCobro('p1', '2026-09');
+    await registrarCobroEnRevision(db, {
+      ...base, pagoId: 'p2', meses: [{ periodo: '2026-09', montoCentavos: 15_000 }],
+      motivo: 'ya habia pagado',
+    }, ACTOR);
+
+    const [caja] = await cajasPendientes(db);
+
+    expect(caja).toMatchObject({
+      cobradorId: 'u-cobrador', nombre: 'cobrador', cobros: 2,
+      totalCentavos: 30_000, enRevisionCentavos: 15_000,
+    });
+  });
+
+  it('una caja cerrada desaparece de la lista', async () => {
+    await unCobro('p1', '2026-09');
+    await cerrarCaja(db, cierre, ACTOR);
+
+    expect(await cajasPendientes(db)).toEqual([]);
+  });
+
+  /**
+   * Lo que mide el riesgo del efectivo es el tiempo en la calle, no el monto:
+   * ciento cincuenta lempiras de hace tres semanas preocupan mas que mil de ayer.
+   */
+  it('la lista sale con la caja mas vieja primero', async () => {
+    await crearUsuario(db, { id: 'u-otro', nombre: 'otro', rol: 'COBRADOR' }, ACTOR, EN);
+    await registrarCobroEnEfectivo(db, {
+      ...base, pagoId: 'p-nuevo', cobradorId: 'u-otro',
+      meses: [{ periodo: '2026-10', montoCentavos: 15_000 }], creadoEn: '2026-10-20T12:00:00.000Z',
+    }, ACTOR);
+    await unCobro('p-viejo', '2026-09');
+
+    expect((await cajasPendientes(db)).map((caja) => caja.cobradorId)).toEqual(['u-cobrador', 'u-otro']);
+  });
+
+  /** Es contra el talonario del cobrador que se compara, papel contra pantalla. */
+  it('el detalle trae el numero de recibo de cada cobro', async () => {
+    await unCobro('p1', '2026-09');
+
+    const [cobro] = await cobrosSinEntregar(db, 'u-cobrador');
+
+    expect(cobro).toMatchObject({ pagoId: 'p1', vivienda: 'E3B2C14', estado: 'EFECTIVO_COBRADO', montoCentavos: 15_000 });
+    expect(cobro.reciboNumero).toBeGreaterThan(0);
+  });
+
+  it('el cobro en revision aparece en el detalle aunque no tenga recibo', async () => {
+    await registrarCobroEnRevision(db, {
+      ...base, pagoId: 'p2', meses: [{ periodo: '2026-09', montoCentavos: 15_000 }],
+      motivo: 'ya habia pagado',
+    }, ACTOR);
+
+    const [cobro] = await cobrosSinEntregar(db, 'u-cobrador');
+
+    expect(cobro).toMatchObject({ pagoId: 'p2', estado: 'EN_REVISION' });
+    expect(cobro.reciboNumero).toBeUndefined();
+  });
+
+  it('el detalle no mezcla lo de otro cobrador', async () => {
+    await crearUsuario(db, { id: 'u-otro', nombre: 'otro', rol: 'COBRADOR' }, ACTOR, EN);
+    await unCobro('p1', '2026-09');
+
+    expect(await cobrosSinEntregar(db, 'u-otro')).toEqual([]);
   });
 });

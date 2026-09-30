@@ -2,7 +2,8 @@ import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTOR, CUOTA_CENTAVOS, PLANTILLA, contar, nuevaBaseDePrueba, sembrar } from './helpers/turso-test-db';
 import {
-  fechaLegible, formatoRecibo, listaDeMeses, montoEnLempiras, parametrosDePlantilla,
+  centavosDesdeLempiras, fechaLegible, formatoRecibo, listaDeMeses, montoEnLempiras,
+  parametrosDePlantilla,
 } from '@/src/domain/recibo';
 import {
   crearPago, crearVivienda, enviosPendientes, marcarEnvioEnviado,
@@ -331,5 +332,57 @@ describe('contenido del recibo', () => {
     });
     expect(referencia).toBe('—');
     expect(fechaPago).toBe('—');
+  });
+});
+
+/**
+ * El camino de vuelta: lo que el tesorero teclea al recibir la caja.
+ *
+ * Se parsea como texto porque `29.99 * 100` en JavaScript da
+ * 2998.9999999999995. Redondear eso funciona hasta que un dia no.
+ */
+describe('centavosDesdeLempiras', () => {
+  it('convierte sin pasar por coma flotante', () => {
+    expect(centavosDesdeLempiras('150')).toBe(15_000);
+    expect(centavosDesdeLempiras('150.00')).toBe(15_000);
+    expect(centavosDesdeLempiras('29.99')).toBe(2_999);
+    expect(centavosDesdeLempiras('0.05')).toBe(5);
+  });
+
+  it('acepta un decimal solo y lo completa', () => {
+    expect(centavosDesdeLempiras('150.5')).toBe(15_050);
+  });
+
+  it('acepta el separador de miles y la L, porque la gente los escribe', () => {
+    expect(centavosDesdeLempiras('1,500.00')).toBe(150_000);
+    expect(centavosDesdeLempiras('L 1,500')).toBe(150_000);
+    expect(centavosDesdeLempiras('  150  ')).toBe(15_000);
+  });
+
+  /** Un monto que no se entiende no se adivina. */
+  it('rechaza lo que no es un monto', () => {
+    expect(centavosDesdeLempiras('')).toBeUndefined();
+    expect(centavosDesdeLempiras('ciento cincuenta')).toBeUndefined();
+    expect(centavosDesdeLempiras('-150')).toBeUndefined();
+    expect(centavosDesdeLempiras('150.005')).toBeUndefined();
+  });
+
+  /**
+   * `150,50` es la forma europea y alguien la va a escribir. Tratar esa coma
+   * como separador de miles lo convertia en L15,050.00 —cien veces mas— sin
+   * avisar. En un campo de dinero eso no puede quedar a la suerte.
+   */
+  it('rechaza la coma que no separa miles en vez de adivinar', () => {
+    expect(centavosDesdeLempiras('150,50')).toBeUndefined();
+    expect(centavosDesdeLempiras('1,50')).toBeUndefined();
+    expect(centavosDesdeLempiras('1,5000')).toBeUndefined();
+    expect(centavosDesdeLempiras('1,500')).toBe(150_000);
+    expect(centavosDesdeLempiras('1,234,567.89')).toBe(123_456_789);
+  });
+
+  it('el ida y vuelta con montoEnLempiras no pierde centavos', () => {
+    for (const centavos of [1, 5, 99, 15_000, 2_999, 1_234_567]) {
+      expect(centavosDesdeLempiras(montoEnLempiras(centavos))).toBe(centavos);
+    }
   });
 });

@@ -95,3 +95,86 @@ export async function cerrarCaja(
     return { pagosCerrados, diferenciaCentavos };
   });
 }
+
+export interface CajaPendiente {
+  cobradorId: string;
+  nombre: string;
+  totalCentavos: number;
+  cobros: number;
+  enRevisionCentavos: number;
+  /** El cobro mas viejo sin entregar. Es lo que dice si hay que apurarse. */
+  desde: string;
+}
+
+/**
+ * Las cajas que estan sin entregar, la mas vieja primero.
+ *
+ * El orden no es decoracion: lo que mide el riesgo del efectivo es **cuanto
+ * tiempo** lleva la plata en la calle, no cuanta es. Mil lempiras de ayer
+ * preocupan menos que ciento cincuenta de hace tres semanas.
+ */
+export async function cajasPendientes(db: Client): Promise<CajaPendiente[]> {
+  const { rows } = await db.execute(`
+    SELECT p.cobrador_id, u.nombre,
+           count(*) AS cobros,
+           coalesce(sum(p.monto_centavos), 0) AS total,
+           coalesce(sum(CASE WHEN p.estado = 'EN_REVISION' THEN p.monto_centavos ELSE 0 END), 0) AS revision,
+           min(p.creado_en) AS desde
+      FROM pagos p
+      LEFT JOIN usuarios u ON u.id = p.cobrador_id
+     WHERE p.metodo = 'EFECTIVO'
+       AND p.cobrador_id IS NOT NULL
+       AND p.cierre_caja_id IS NULL
+       AND p.estado IN ('EFECTIVO_COBRADO', 'VERIFICADO', 'EN_REVISION')
+     GROUP BY p.cobrador_id
+     ORDER BY desde`);
+
+  return rows.map((fila) => ({
+    cobradorId: String(fila.cobrador_id),
+    nombre: fila.nombre == null ? String(fila.cobrador_id) : String(fila.nombre),
+    totalCentavos: Number(fila.total),
+    cobros: Number(fila.cobros),
+    enRevisionCentavos: Number(fila.revision),
+    desde: String(fila.desde),
+  }));
+}
+
+export interface CobroSinEntregar {
+  pagoId: string;
+  vivienda: string;
+  estado: string;
+  montoCentavos: number;
+  fechaPago: string;
+  reciboNumero?: number;
+}
+
+/**
+ * El detalle de lo que un cobrador lleva encima, para la hoja de entrega.
+ *
+ * Lleva el numero de recibo porque es lo que el cobrador tiene anotado en su
+ * talonario: contra eso compara el tesorero, papel contra pantalla. Los cobros
+ * en revision no tienen numero y aparecen igual — esa plata tambien se entrega.
+ */
+export async function cobrosSinEntregar(db: Client, cobradorId: string): Promise<CobroSinEntregar[]> {
+  const { rows } = await db.execute({
+    sql: `SELECT p.id, p.estado, p.monto_centavos, p.fecha_pago, v.codigo, r.numero
+            FROM pagos p
+            LEFT JOIN viviendas v ON v.id = p.vivienda_id
+            LEFT JOIN recibos r ON r.pago_id = p.id AND r.estado = 'EMITIDO'
+           WHERE p.metodo = 'EFECTIVO'
+             AND p.cobrador_id = ?
+             AND p.cierre_caja_id IS NULL
+             AND p.estado IN ('EFECTIVO_COBRADO', 'VERIFICADO', 'EN_REVISION')
+           ORDER BY p.creado_en`,
+    args: [cobradorId],
+  });
+
+  return rows.map((fila) => ({
+    pagoId: String(fila.id),
+    vivienda: fila.codigo == null ? '—' : String(fila.codigo),
+    estado: String(fila.estado),
+    montoCentavos: Number(fila.monto_centavos),
+    fechaPago: fila.fecha_pago == null ? '' : String(fila.fecha_pago),
+    reciboNumero: fila.numero == null ? undefined : Number(fila.numero),
+  }));
+}
