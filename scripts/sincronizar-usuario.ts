@@ -16,7 +16,8 @@
  */
 import { normalizePhone } from '../src/domain/phone.ts';
 import { createTursoClient, tursoConfigFromEnv } from '../src/storage/turso-client.ts';
-import { sincronizarUsuario, type RolUsuario } from '../src/storage/usuarios.ts';
+import { fijarCredenciales, sincronizarUsuario, type RolUsuario } from '../src/storage/usuarios.ts';
+import { hashDeClave, LARGO_MINIMO_CLAVE } from '../src/auth/claves.ts';
 
 const ROLES: readonly RolUsuario[] = ['ADMIN', 'TESORERO', 'COBRADOR'];
 const ACTOR = 'workflow:usuarios';
@@ -39,7 +40,8 @@ async function main(): Promise<void> {
     const id = opcional('PAGOS_USUARIO_ID') ?? `u-${rol.toLowerCase()}`;
     const nombre = opcional('PAGOS_USUARIO_NOMBRE') ?? id;
 
-    const resultado = await sincronizarUsuario(client, { id, nombre, rol, telefono }, ACTOR, new Date().toISOString());
+    const en = new Date().toISOString();
+    const resultado = await sincronizarUsuario(client, { id, nombre, rol, telefono }, ACTOR, en);
 
     const dicho = {
       creado: `Alta registrada con rol ${rol}.`,
@@ -47,6 +49,24 @@ async function main(): Promise<void> {
       sin_cambios: 'Ya estaba asi. No se cambio nada.',
     };
     console.log(dicho[resultado]);
+
+    // El usuario y la clave con que esta persona entra al panel. Van juntos o no
+    // van: media credencial no sirve para nada. Son opcionales porque un usuario
+    // puede existir solo para mandar el extracto por WhatsApp, sin entrar nunca.
+    const login = opcional('PAGOS_USUARIO_LOGIN');
+    const clave = opcional('PAGOS_USUARIO_CLAVE');
+
+    if (login && !clave) throw new Error('Falta PAGOS_USUARIO_CLAVE.');
+    if (clave && !login) throw new Error('Falta PAGOS_USUARIO_LOGIN.');
+
+    if (login && clave) {
+      if (clave.length < LARGO_MINIMO_CLAVE) {
+        throw new Error(`La clave necesita al menos ${LARGO_MINIMO_CLAVE} caracteres.`);
+      }
+      await fijarCredenciales(client, { id, login, claveHash: await hashDeClave(clave) }, ACTOR, en);
+      // Ni el usuario ni la clave: solo que ya puede entrar (invariante 12).
+      console.log(`Credencial configurada. Ya puede entrar al panel con rol ${rol}.`);
+    }
   } finally {
     client.close();
   }

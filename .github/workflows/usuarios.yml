@@ -51,4 +51,6 @@ jobs:
           PAGOS_USUARIO_ROL: ${{ secrets.PAGOS_USUARIO_ROL }}
           PAGOS_USUARIO_ID: ${{ secrets.PAGOS_USUARIO_ID }}
           PAGOS_USUARIO_NOMBRE: ${{ secrets.PAGOS_USUARIO_NOMBRE }}
+          PAGOS_USUARIO_LOGIN: ${{ secrets.PAGOS_USUARIO_LOGIN }}
+          PAGOS_USUARIO_CLAVE: ${{ secrets.PAGOS_USUARIO_CLAVE }}
         run: npx tsx scripts/sincronizar-usuario.ts

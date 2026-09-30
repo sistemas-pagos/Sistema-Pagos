@@ -5,9 +5,19 @@ import { NextResponse } from 'next/server';
  * compartida, asi que no hay persona que registrar: el usuario por persona es
  * parte de la fase 7, y hasta entonces decir "panel" es lo unico cierto.
  */
-const ACTOR_PANEL = 'panel';
+/**
+ * Quien hizo el cambio, para `eventos` (invariante 8). Hasta el PR de usuarios
+ * esto era la constante 'panel' porque la clave era compartida y no habia forma
+ * de saber quien; ahora sale de la sesion. Quien entra por el respaldo de la
+ * clave compartida sigue anotandose como 'panel', que es lo unico cierto.
+ */
+async function actorDeLaSesion(): Promise<string> {
+  const sesion = await sesionActual();
+  return sesion ? sesion.uid : UID_CLAVE_COMPARTIDA;
+}
 
-import { isAdminAuthenticated, isSameOriginRequest } from '@/src/auth/guard';
+import { isAdminAuthenticated, isSameOriginRequest, sesionActual } from '@/src/auth/guard';
+import { UID_CLAVE_COMPARTIDA } from '@/src/auth/session';
 import { isPeriod } from '@/src/domain/periods';
 import type { PaymentRecord } from '@/src/domain/types';
 import { buildManualVerificationUpdate } from '@/src/services/manual-verification';
@@ -27,6 +37,7 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdminAuthenticated())) return new NextResponse('Unauthorized', { status: 401 });
+  const ACTOR_PANEL = await actorDeLaSesion();
   if (!isSameOriginRequest(request)) return new NextResponse('Forbidden', { status: 403 });
 
   const { id } = await params;

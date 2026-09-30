@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetEnvForTests } from '@/src/config/env';
-import { createAdminSession, verifyAdminAccessKey, verifyAdminSession } from '@/src/auth/session';
+import { crearSesion, leerSesion, verifyAdminAccessKey } from '@/src/auth/session';
 import { isSameOriginRequest } from '@/src/auth/guard';
 import nextConfig from '@/next.config';
 
@@ -24,10 +24,35 @@ describe('admin authentication', () => {
 
   it('signs sessions and rejects tampering or expiration', () => {
     const now = new Date('2026-09-08T18:00:00.000Z');
-    const token = createAdminSession(now);
-    expect(verifyAdminSession(token, new Date('2026-09-08T18:01:00.000Z'))).toBe(true);
-    expect(verifyAdminSession(`${token}tampered`, now)).toBe(false);
-    expect(verifyAdminSession(token, new Date('2026-09-09T03:00:00.000Z'))).toBe(false);
+    const token = crearSesion({ uid: 'u-admin', rol: 'ADMIN' }, now);
+    expect(leerSesion(token, new Date('2026-09-08T18:01:00.000Z'))).toEqual({ uid: 'u-admin', rol: 'ADMIN' });
+    expect(leerSesion(`${token}tampered`, now)).toBeUndefined();
+    expect(leerSesion(token, new Date('2026-09-09T03:00:00.000Z'))).toBeUndefined();
+  });
+
+  /**
+   * La sesion lleva el rol, asi que una sesion falsificable seria una forma de
+   * ascenderse solo. La firma es HMAC sobre el payload completo: cambiar el rol
+   * cambia el payload y la firma deja de cuadrar.
+   */
+  it('no se puede ascender de rol editando la sesion', () => {
+    const now = new Date('2026-09-08T18:00:00.000Z');
+    const token = crearSesion({ uid: 'u-cobrador', rol: 'COBRADOR' }, now);
+    const [payload, firma] = token.split('.');
+
+    const adulterado = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    adulterado.rol = 'ADMIN';
+    const otroPayload = Buffer.from(JSON.stringify(adulterado), 'utf8').toString('base64url');
+
+    expect(leerSesion(`${otroPayload}.${firma}`, now)).toBeUndefined();
+    expect(leerSesion(token, now)).toEqual({ uid: 'u-cobrador', rol: 'COBRADOR' });
+  });
+
+  it('un rol que no existe no abre nada', () => {
+    const now = new Date('2026-09-08T18:00:00.000Z');
+    // Se firma de verdad, con el mismo secreto: lo que se rechaza es el rol.
+    const token = crearSesion({ uid: 'u-x', rol: 'SUPERADMIN' as never }, now);
+    expect(leerSesion(token, now)).toBeUndefined();
   });
 });
 

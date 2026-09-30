@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { isDemoMode } from '@/src/config/env';
-import { isAdminAuthenticated } from '@/src/auth/guard';
+import { sesionActual } from '@/src/auth/guard';
 import { BLOQUEO_MINUTOS } from '@/src/auth/intentos';
 
 /** El parametro viene de la URL, asi que se valida antes de mostrarlo. */
@@ -12,7 +12,8 @@ function espera(minutos: string | undefined): string {
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; minutos?: string }> }) {
   if (isDemoMode()) redirect('/');
-  if (await isAdminAuthenticated()) redirect('/admin');
+  const sesion = await sesionActual();
+  if (sesion) redirect(sesion.rol === 'COBRADOR' ? '/cobros' : '/admin');
   const params = await searchParams;
 
   return (
@@ -20,15 +21,28 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <section className="login-card">
         <p className="eyebrow">Panel privado</p>
         <h1>Acceso administrativo</h1>
-        <p>El panel de producción no es público. Utiliza la clave configurada para este ambiente.</p>
+        <p>Entrá con tu usuario y tu clave. Cada persona tiene las suyas.</p>
         {params.error === 'bloqueado' && (
           <p role="alert">
             Demasiados intentos fallidos. Vuelve a intentar en {espera(params.minutos)}.
           </p>
         )}
-        {params.error && params.error !== 'bloqueado' && <p role="alert">La clave no es válida.</p>}
+        {/* Un solo mensaje para usuario inexistente y clave mala: decir cual
+            de los dos falló le confirma a quien prueba que el usuario existe. */}
+        {params.error && params.error !== 'bloqueado' && <p role="alert">Usuario o clave incorrectos.</p>}
         <form method="post" action="/api/admin/login">
-          <label htmlFor="access-key">Clave de acceso</label>
+          <label htmlFor="usuario">Usuario</label>
+          <input
+            id="usuario"
+            name="usuario"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={64}
+          />
+          <label htmlFor="access-key">Clave</label>
           <input id="access-key" name="accessKey" type="password" autoComplete="current-password" required maxLength={256} />
           <button className="primary-button" type="submit">Entrar</button>
         </form>

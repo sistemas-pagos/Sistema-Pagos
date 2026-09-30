@@ -1,11 +1,37 @@
 import { cookies } from 'next/headers';
 import { isDemoMode } from '@/src/config/env';
-import { ADMIN_SESSION_COOKIE, verifyAdminSession } from './session';
+import type { RolUsuario } from '@/src/storage/usuarios';
+import { ADMIN_SESSION_COOKIE, leerSesion, UID_CLAVE_COMPARTIDA, type Sesion } from './session';
+
+/** Quien manda el extracto del banco y quien verifica: el trabajo de escritorio. */
+export const ROLES_DEL_PANEL: readonly RolUsuario[] = ['ADMIN', 'TESORERO'];
+/** Quien cobra en la calle. Un ADMIN tambien entra, para probar y para corregir. */
+export const ROLES_DE_COBROS: readonly RolUsuario[] = ['ADMIN', 'COBRADOR'];
+
+/**
+ * Quien esta usando el panel, o `undefined`.
+ *
+ * En la demostracion no hay base ni sesion: se devuelve un ADMIN ficticio para
+ * que las pantallas se puedan mirar, igual que antes.
+ */
+export async function sesionActual(): Promise<Sesion | undefined> {
+  if (isDemoMode()) return { uid: UID_CLAVE_COMPARTIDA, rol: 'ADMIN' };
+  const cookieStore = await cookies();
+  return leerSesion(cookieStore.get(ADMIN_SESSION_COOKIE)?.value);
+}
+
+/**
+ * Falla cerrado: sin sesion, o con un rol que no esta en la lista, es `false`.
+ * Quien no tiene permiso no se entera de que la pagina existe — se le manda al
+ * login, no a un mensaje que le confirme que hay algo detras.
+ */
+export async function tieneRol(...roles: readonly RolUsuario[]): Promise<boolean> {
+  const sesion = await sesionActual();
+  return sesion !== undefined && roles.includes(sesion.rol);
+}
 
 export async function isAdminAuthenticated(): Promise<boolean> {
-  if (isDemoMode()) return true;
-  const cookieStore = await cookies();
-  return verifyAdminSession(cookieStore.get(ADMIN_SESSION_COOKIE)?.value);
+  return tieneRol(...ROLES_DEL_PANEL);
 }
 
 function origenDe(valor: string): string | undefined {
