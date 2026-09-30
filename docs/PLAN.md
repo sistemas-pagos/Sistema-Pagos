@@ -8,7 +8,7 @@ Este documento reemplaza las decisiones anteriores cuando haya conflicto. Implem
 - Identidad de vivienda: **Etapa + Bloque + Casa** (texto; admite letras). Código compacto `E1B4C18`.
 - **Turso** es la única fuente de verdad (base nueva, sin relación con otros proyectos).
 - **Google Sheets** es solo lectura (dashboard, pendientes, excepciones, cierres).
-- **Google Form** para el cobro en efectivo.
+- **El cobro en efectivo se registra en el panel**, desde el teléfono del cobrador. Antes decía Google Form; se cambió porque registrarlo en el panel elimina la cuenta de servicio de Google, el workflow `procesar-efectivo` y la sincronización de una hoja de respuestas, para el mismo resultado.
 - **GitHub Actions** hace el trabajo pesado. **Vercel** solo aloja el webhook mínimo y el panel.
 - **Sin Apps Script.**
 - La verificación de transferencias se hace enviando el **CSV del banco por WhatsApp** desde un número autorizado.
@@ -277,10 +277,15 @@ Reglas para todos: `permissions: contents: read` salvo lo necesario, `concurrenc
 - Adaptar al formato real del CSV de BAC (pendiente de ejemplo).
 
 ### Fase 6 — Efectivo
-- Leer la hoja de respuestas del Form con la cuenta de servicio.
-- Validar correo del cobrador, vivienda, recibo de talonario único, teléfono y consentimiento.
-- Crear pago `EFECTIVO_COBRADO` + recibo. Cierre de caja → `VERIFICADO` (sin nuevo recibo).
-- Aceptación: una respuesta del Form nunca se procesa dos veces.
+- Pantalla propia para el cobrador, **diseñada para teléfono**: el panel de admin sigue siendo de escritorio.
+- Filtros por etapa, bloque, casa, estado, método y mes, todos como listas. Solo la referencia se escribe.
+- El cobrador ve **estado, no datos**: nunca depositante, teléfono ajeno ni monto de otra casa.
+- El monto **no se escribe**: se marcan meses y se calcula con la cuota vigente de cada uno. No se cobran meses incompletos.
+- Crear pago `EFECTIVO_COBRADO` + recibo en una transacción, y disparar el envío en el momento: el recibo digital es lo único que recibe el vecino.
+- Si la casa ya pagó ese mes, el cobro entra `EN_REVISION` con comentario: sin tomar el mes, sin recibo y sin mensaje. El cobrador ya tiene la plata y no registrarla sería peor.
+- El total a entregar del cobrador **incluye los cobros en revisión**.
+- Cierre de caja → `VERIFICADO` (sin nuevo recibo).
+- Aceptación: un cobro a una casa que ya pagó no emite recibo ni encola envío.
 
 ### Fase 7 — Sheets, panel y cierre de mes
 - `sincronizar-sheets`: Pendientes (después de la fecha límite, excluye por verificar), Dashboard, Excepciones, Recibos no entregados, Cierres.

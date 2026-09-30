@@ -40,6 +40,8 @@ function pago(overrides: Partial<PaymentRecord> = {}): PaymentRecord {
   return {
     id: 'pay-1', createdAt: '2026-09-02T10:00:00.000Z', updatedAt: '2026-09-02T10:00:00.000Z',
     sourceMessageId: 'msg-1', phone: '50400000001', bank: 'BAC Honduras', depositor: 'QUIEN DEPOSITA',
+    // `savePayment` es el camino de los comprobantes: siempre transferencia.
+    method: 'TRANSFERENCIA' as const,
     transactionDate: '2026-09-02', transactionTime: '14:45', amount: 150, detail: 'Pago septiembre',
     reference: '412000001', beneficiary: 'TITULAR', destinationAccountMasked: '••••2233',
     stage: '1', block: '4', house: '18', period: '2026-09', status: 'PENDIENTE_VERIFICACION',

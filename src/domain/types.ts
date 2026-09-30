@@ -81,6 +81,11 @@ export interface PaymentRecord {
   /** WhatsApp sender. It is never housing identity. */
   phone: string;
   bank: string;
+  /**
+   * Como entro la plata. Sin esto, un cobro en efectivo ya cerrado en caja
+   * queda como VERIFICADO y no hay forma de distinguirlo de una transferencia.
+   */
+  method?: MetodoPago;
   depositor?: string;
   transactionDate?: string;
   transactionTime?: string;

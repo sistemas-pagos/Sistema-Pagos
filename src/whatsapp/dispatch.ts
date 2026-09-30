@@ -1,7 +1,6 @@
 import { env } from '@/src/config/env';
 import { safeLog } from '@/src/security/logging';
 
-const EVENT_TYPE = 'procesar-comprobantes';
 const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
 
 /**
@@ -15,7 +14,7 @@ const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
  * en la base. Asi ningun dato del vecino pasa por la API de GitHub ni queda en
  * el historial de corridas (invariante 12).
  */
-export async function requestReceiptProcessing(): Promise<boolean> {
+async function dispatch(eventType: string): Promise<boolean> {
   const config = env();
   const repo = config.PAGOS_GITHUB_REPO;
   const token = config.PAGOS_DISPATCH_TOKEN;
@@ -39,7 +38,7 @@ export async function requestReceiptProcessing(): Promise<boolean> {
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ event_type: EVENT_TYPE }),
+      body: JSON.stringify({ event_type: eventType }),
       cache: 'no-store',
     });
 
@@ -55,4 +54,21 @@ export async function requestReceiptProcessing(): Promise<boolean> {
     });
     return false;
   }
+}
+
+/** Hay comprobantes nuevos en la cola de `mensajes`. */
+export function requestReceiptProcessing(): Promise<boolean> {
+  return dispatch('procesar-comprobantes');
+}
+
+/**
+ * Hay un recibo listo para salir **ahora**.
+ *
+ * El cron de `enviar-recibos` dice cada quince minutos pero GitHub lo retrasa a
+ * ~2 horas. Para una transferencia eso da igual: el vecino ya tiene el
+ * comprobante del banco. Para un cobro en efectivo no — el recibo digital es lo
+ * unico que va a recibir, y el cobrador se va de la puerta.
+ */
+export function requestReceiptSending(): Promise<boolean> {
+  return dispatch('enviar-recibos');
 }

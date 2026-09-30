@@ -55,6 +55,7 @@ function aPago(fila: Row): PaymentRecord {
     sourceMessageId: String(fila.message_id ?? ''),
     phone: String(fila.telefono_contacto ?? ''),
     bank: String(fila.banco ?? ''),
+    method: fila.metodo == null ? undefined : (String(fila.metodo) as PaymentRecord['method']),
     depositor: texto(fila.depositante),
     transactionDate: texto(fila.fecha_pago),
     transactionTime: texto(fila.hora_pago),
