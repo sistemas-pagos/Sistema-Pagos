@@ -7,7 +7,9 @@ Este documento reemplaza las decisiones anteriores cuando haya conflicto. Implem
 - Métodos de pago: **transferencia** (cuenta bancaria exclusiva) y **efectivo**. Sin pagos adelantados.
 - Identidad de vivienda: **Etapa + Bloque + Casa** (texto; admite letras). Código compacto `E1B4C18`.
 - **Turso** es la única fuente de verdad (base nueva, sin relación con otros proyectos).
-- **Google Sheets** es solo lectura (dashboard, pendientes, excepciones, cierres).
+- **Google Sheets** es solo lectura (dashboard, pendientes, excepciones, cierres). No se
+  construyó: esas cinco vistas quedaron en el panel y hoy nada del sistema habla con Google.
+  Si todavía hace falta es una pregunta abierta de la sección 7.
 - **El cobro en efectivo se registra en el panel**, desde el teléfono del cobrador. Antes decía Google Form; se cambió porque registrarlo en el panel elimina la cuenta de servicio de Google, el workflow `procesar-efectivo` y la sincronización de una hoja de respuestas, para el mismo resultado.
 - **GitHub Actions** hace el trabajo pesado. **Vercel** solo aloja el webhook mínimo y el panel.
 - **Sin Apps Script.**
@@ -28,12 +30,23 @@ Vecino ──WhatsApp──► Vercel /api/whatsapp/webhook
                        4. repository_dispatch → GitHub
                        5. responde 200
 
+Cobrador ──teléfono──► /cobros (panel)
+                       registra el efectivo, emite recibo y pide el envío
+
+Tesorero ──WhatsApp──► el CSV del banco entra como un mensaje más
+                       y lo concilia procesar-comprobantes
+
 GitHub Actions ─► procesar-comprobantes ─► Turso ─► enviar-recibos ─► WhatsApp
-               ─► procesar-efectivo (lee respuestas del Form)
-               ─► conciliar-csv
-               ─► sincronizar-sheets ─► Google Sheets (solo lectura)
-               ─► mantenimiento / cierre-mes
+               ─► mantenimiento / cierre-mes / usuarios / migraciones
 ```
+
+**Un solo worker para todo lo que llega por WhatsApp.** El comprobante del vecino y el
+extracto del tesorero entran por el mismo webhook y salen de la misma cola, así que
+`procesar-comprobantes` los atiende a los dos. Un workflow aparte solo para el CSV tendría
+que leer la misma cola, con su propio `concurrency`, para hacer lo mismo.
+
+El efectivo no pasa por Actions: el cobrador está en la puerta y el número de recibo lo
+necesita en el momento.
 
 ## 3. Invariantes (reemplazan las de AGENTS.md)
 
@@ -215,24 +228,75 @@ CREATE TRIGGER eventos_no_delete BEFORE DELETE ON eventos BEGIN SELECT RAISE(ABO
 
 Vistas a crear: `v_estado_mensual`, `v_pendientes_cobro`, `v_excepciones`, `v_recibos_no_entregados`.
 
-Migraciones versionadas en `migrations/NNN_*.sql`, aplicadas por un workflow manual con Environment protegido.
+Migraciones versionadas en `migrations/NNN_*.sql`, aplicadas por un workflow manual con
+Environment protegido. Una migración aplicada es **inmutable**: el script guarda su `sha256` y
+rechaza la corrida si el archivo cambió, así que el esquema se cambia agregando un archivo.
+
+Lo de arriba es el borrador de la `001` y **no es el esquema de hoy**. Producción va por la
+`008`; para leer el esquema real hay que leer los archivos. Lo que agregaron las siguientes:
+
+| Migración | Qué agregó |
+|---|---|
+| `002` | `mensajes.cuerpo`, el texto del mensaje |
+| `003` | índice único de un solo recibo `EMITIDO` por pago |
+| `004` | `periodo`, `duplicado_motivo` y `verificacion_origen` en `pagos`; `responsable` en `viviendas` |
+| `005` | tabla `intentos_login`, para el límite de intentos |
+| `006` | un solo `SALDO_INICIAL` por vivienda |
+| `007` | `usuario` y `clave_hash`, con índice único parcial |
+| `008` | `notas_pago`: lo que el cobrador quiere decir sobre un pago que no puede tocar |
 
 ## 5. Workflows de GitHub Actions
 
+Lo que existe hoy en `.github/workflows/`:
+
 | Workflow | Disparador | Función |
 |---|---|---|
+| `ci` | cada PR y push a `main` | lint, typecheck, test y build |
 | `migraciones` | manual | Aplica migraciones pendientes |
-| `procesar-comprobantes` | `repository_dispatch` + cron de respaldo | Descarga, OCR, parser, guarda, responde |
-| `procesar-efectivo` | cron 5–10 min | Lee respuestas nuevas del Form y crea pago + recibo |
-| `conciliar-csv` | `repository_dispatch` | Importa CSV, envía resumen, aplica al recibir "SI" |
-| `enviar-recibos` | al terminar los anteriores + cron | Envía plantillas y reintenta fallidos |
-| `sincronizar-sheets` | cron 10–15 min + al terminar procesos | Actualiza las pestañas de solo lectura |
-| `mantenimiento` | cron diario | Expira contextos y confirmaciones de CSV |
-| `cierre-mes` | manual | Cuadra y bloquea el mes |
+| `usuarios` | manual | Sincroniza el número autorizado y fija credenciales |
+| `procesar-comprobantes` | `repository_dispatch` + cron `*/10` | Descarga, OCR, parser, guarda, responde. **También concilia el CSV del banco**, porque llega por el mismo webhook |
+| `enviar-recibos` | `repository_dispatch` + al terminar `procesar-comprobantes` + cron `*/15` | Envía plantillas y reintenta fallidos |
+| `mantenimiento` | cron diario 07:30 UTC | Expira contextos y confirmaciones de CSV |
+| `cierre-mes` | manual, con el período como input | Cuadra y bloquea el mes |
+
+Dos cambios respecto del plan original, los dos por la misma razón —el workflow no aportaba
+nada que el existente no hiciera ya:
+
+- **`procesar-efectivo` no existe.** El cobro en efectivo se registra en el panel (sección 1),
+  así que no hay hoja de respuestas que leer.
+- **`conciliar-csv` no existe como workflow aparte.** El CSV entra como un mensaje de WhatsApp
+  y lo atiende `procesar-comprobantes`, que ya lee esa cola.
+
+**`sincronizar-sheets` sigue sin construirse**, y con él toda la sección de Sheets. El panel
+muestra hoy el dashboard, los pendientes, las excepciones, los recibos no entregados y los
+cierres, así que la pregunta de si Sheets todavía hace falta está en la sección 7.
+
+El cron de Actions es *best-effort*: lo medimos y los huecos reales son de ~2 horas, no los
+10–15 minutos que declara. Por eso lo que tiene que responder rápido no depende del cron —
+`enviar-recibos` se dispara con `repository_dispatch` desde el cobro en efectivo y al terminar
+`procesar-comprobantes`, y el cron queda como respaldo.
 
 Reglas para todos: `permissions: contents: read` salvo lo necesario, `concurrency` por workflow, `timeout-minutes`, acciones fijadas por SHA, secretos en el Environment `pagos-produccion`, sin `pull_request_target`, sin artifacts con datos, logs enmascarados.
 
 ## 6. Fases y criterios de aceptación
+
+**Dónde estamos.** Las fases 0 a 6 están construidas y mergeadas, con la base de producción
+migrada hasta la `008`. La 7 está a medias: el panel y el cierre de mes existen, Sheets no.
+
+| Fase | Estado |
+|---|---|
+| 0 — Base de datos | ✅ |
+| 1 — Webhook y procesamiento | ✅ |
+| 2 — Parser y validación | ✅ |
+| 3 — Reglas de mes y excepciones | ✅ |
+| 4 — Recibos | ✅ |
+| 5 — Conciliación por CSV | ✅ (dentro de `procesar-comprobantes`) |
+| 6 — Efectivo | ✅ |
+| 7 — Sheets, panel y cierre de mes | ◐ a medias, ver abajo |
+
+Lo que falta **no es código**: el padrón cargado, las credenciales del cobrador y el método
+de pago en Meta. Sin padrón no se puede cobrar nada, porque un pago necesita una casa a la
+cual asignarse.
 
 ### Fase 0 — Base de datos
 - Cliente Turso (`@libsql/client`), migración 001, workflow `migraciones`.
@@ -288,24 +352,57 @@ Reglas para todos: `permissions: contents: read` salvo lo necesario, `concurrenc
 - Aceptación: un cobro a una casa que ya pagó no emite recibo ni encola envío.
 
 ### Fase 7 — Sheets, panel y cierre de mes
-- `sincronizar-sheets`: Pendientes (después de la fecha límite, excluye por verificar), Dashboard, Excepciones, Recibos no entregados, Cierres.
-- Panel: validar estado en cada acción (H8), acciones de rechazar / no encontrado / resolver monto (H9), usuario por persona, límite de intentos de login, todo con `eventos`.
-- Cierre de mes con cuadres y bloqueo.
-- Quitar almacenamiento en Sheets como base, pestañas sin uso y `activeMessages`; usar `status-machine.ts` en todas las transiciones.
+
+Hecho:
+
+- Panel: estado validado en cada acción (H8), acciones de rechazar / no encontrado / resolver
+  monto (H9), **un usuario por persona con su rol** y límite de intentos de login, todo con
+  `eventos`.
+- Cierre de mes con cuadres y bloqueo (`cierre-mes`, manual, con el período como input).
+- Pantallas que el plan pedía en Sheets y que quedaron en el panel: Dashboard, Pendientes,
+  Excepciones, Recibos no entregados y Cierres.
+- Fuera el almacenamiento en Sheets, las pestañas sin uso y `activeMessages`. Ya no queda
+  ninguna referencia a los tres.
+
+Falta:
+
+- **`sincronizar-sheets` y las pestañas de solo lectura.** Es lo único de esta fase que sigue
+  sin construirse; la pregunta de si todavía hace falta está en la sección 7.
+- **`status-machine.ts` en todas las transiciones.** Hoy lo usa `acciones-panel.ts` y nada
+  más. Las demás transiciones son correctas, pero cada una decide por su cuenta: la máquina de
+  estados existe y no es todavía el único camino.
 
 ## 7. Pendiente de definir (no inventar; preguntar)
 
 - Fecha de salida de la lista de cobro.
-- Tesorero y frecuencia del cierre de caja.
-- Tratamiento de montos que no son múltiplos de la cuota.
+- **Tesorero y frecuencia del cierre de caja.** El código no asume ninguna de las dos: cierra
+  cuando alguien con rol ADMIN o TESORERO lo hace, y no impone frecuencia.
+- **Tratamiento de montos que no son múltiplos de la cuota.** Sigue abierto para
+  transferencias, donde el vecino manda lo que quiere; con efectivo no puede ocurrir, porque
+  el cobrador marca meses y el total sale de la cuota de cada uno.
 - Casas vacías o exoneradas.
-- Saldo inicial de cada casa.
-- Ejemplo real anonimizado del CSV de BAC y de 10–20 comprobantes.
-- Texto de las plantillas de WhatsApp para aprobación en Meta.
+- Saldo inicial de cada casa. Es un dato, no una regla: la tabla `ajustes` y la importación en
+  `/admin/saldos` ya existen y esperan los montos.
+- **¿Sigue haciendo falta Google Sheets?** El plan la pedía como destino de solo lectura para
+  el dashboard, los pendientes, las excepciones y los cierres. Esas cinco vistas están hoy en
+  el panel. Construir `sincronizar-sheets` volvería a traer una cuenta de servicio de Google y
+  sus credenciales, así que conviene decidirlo antes y no por inercia.
+- 10–20 comprobantes reales anonimizados. Hay dos en los fixtures; más casos reales es lo que
+  haría al parser confiable de verdad.
+
+Resuelto desde la última versión de este documento:
+
+- **El CSV de BAC.** El formato real está adaptado y documentado en
+  `docs/EXTRACTO_BANCARIO.md`: no es una tabla sino tres secciones, y `src/bank/bac-csv.ts`
+  las localiza por su fila de encabezado.
+- **El texto de la plantilla de WhatsApp.** `recibo_pago` está aprobada en Meta y su cuerpo,
+  con el orden exacto de los ocho parámetros, está en `docs/PLANTILLAS_WHATSAPP.md`.
 
 ## 8. Reglas de trabajo
 
-- Una fase por rama `pagos/fase-N-*` y un PR `[PAGOS] ...`.
+- Un cambio por rama `pagos/<tema>` y un PR `[PAGOS] ...`. En la práctica la rama se nombra
+  por el tema y no por el número de fase, porque varios PR de la misma fase se pisaban el
+  nombre.
 - Escribir pruebas antes del cambio; `npm run lint`, `typecheck`, `test` y `build` deben pasar.
 - No inventar reglas de negocio fuera de este documento; si falta algo, detenerse y preguntar.
 - Nunca commitear secretos, datos reales ni archivos exportados de producción.
