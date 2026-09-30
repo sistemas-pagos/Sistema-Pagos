@@ -10,7 +10,15 @@
  * Cada zona tocable mide 44 px o mas, que es lo que un dedo acierta sin mirar.
  */
 
-.cob {
+/*
+ * Los colores viven en el `body` y no en `.cob`.
+ *
+ * En escritorio `.cob` se limita a 720 px, asi que a los lados asomaba el
+ * degradado del panel de admin — el que esta pantalla justamente no hereda.
+ * Poniendo el fondo en el `body` la pantalla es de un solo color a cualquier
+ * ancho, y los tokens bajan por herencia sin repetir un solo hex.
+ */
+body:has(.cob) {
   --fondo: #08120f;
   --tarjeta: #0e1d18;
   --linea: #1c3229;
@@ -22,9 +30,12 @@
   --aviso: #e8b75b;
   --aviso-fondo: #2a2113;
 
-  min-height: 100dvh;
   background: var(--fondo);
   color: var(--texto);
+}
+
+.cob {
+  min-height: 100dvh;
   padding: 16px 16px 40px;
   display: flex;
   flex-direction: column;
@@ -166,6 +177,16 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: .01em;
 }
+
+/*
+ * El codigo y el detalle son dos lineas, no dos palabras seguidas.
+ *
+ * Los dos son `span`, asi que sin esto quedan en linea y el `margin` de
+ * `.cob__meta` no hace nada: en un telefono se leia `E1B1C1Transferencia ·
+ * 2026-09-06`, todo pegado, y el codigo de la vivienda es justo lo que el
+ * cobrador busca de un vistazo.
+ */
+.cob__datos { display: grid; min-width: 0; }
 
 .cob__meta { font-size: .8rem; color: var(--apagado); margin: 3px 0 0; }
 

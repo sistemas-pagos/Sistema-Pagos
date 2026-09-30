@@ -194,7 +194,7 @@ function Casa({ fila, periodo }: { fila: FilaDeCobro; periodo: string }) {
   return (
     <li>
       <Link className="cob__casa" href={`/cobros/${fila.viviendaId}?mes=${periodo}`}>
-        <span>
+        <span className="cob__datos">
           <span className="cob__codigo">{fila.codigo}</span>
           <span className="cob__meta">
             {fila.estado === 'PENDIENTE'
