@@ -178,3 +178,70 @@ export async function usuarioResponsable(db: Db): Promise<Usuario | undefined> {
   if (!fila) return undefined;
   return { id: String(fila.id), nombre: String(fila.nombre), rol: String(fila.rol) as RolUsuario, activo: true };
 }
+
+/** El usuario tal como se escribe al entrar: sin espacios y en minuscula. */
+export function normalizarLogin(valor: string): string {
+  return valor.trim().toLowerCase();
+}
+
+/**
+ * Busca a quien intenta entrar, con su hash.
+ *
+ * Devuelve la fila aunque este inactiva, y es a proposito: quien decide es
+ * `credencialValida`, y tiene que poder distinguir "no existe" de "esta de
+ * baja" **sin** que la diferencia se note desde afuera. Si esta consulta ya
+ * filtrara por activo, un usuario dado de baja respondería mas rapido que uno
+ * inexistente y eso se puede medir.
+ */
+export async function credencialPorLogin(
+  db: Db,
+  login: string,
+): Promise<{ id: string; nombre: string; rol: RolUsuario; activo: boolean; claveHash?: string } | undefined> {
+  const normalizado = normalizarLogin(login);
+  if (!normalizado) return undefined;
+
+  const { rows } = await db.execute({
+    sql: 'SELECT id, nombre, rol, activo, clave_hash FROM usuarios WHERE usuario = ?',
+    args: [normalizado],
+  });
+
+  const fila = rows[0];
+  if (!fila) return undefined;
+  return {
+    id: String(fila.id),
+    nombre: String(fila.nombre),
+    rol: String(fila.rol) as RolUsuario,
+    activo: Number(fila.activo) === 1,
+    claveHash: fila.clave_hash == null ? undefined : String(fila.clave_hash),
+  };
+}
+
+/**
+ * Le pone usuario y clave a alguien que ya existe en la tabla.
+ *
+ * El evento dice que la credencial cambio, nunca el usuario ni la clave
+ * (invariante 12). Saber *que* se cambio alcanza para auditar; saber *cual* es
+ * regalar la mitad del dato.
+ */
+export async function fijarCredenciales(
+  db: Db,
+  input: { id: string; login: string; claveHash: string },
+  actor: string,
+  en: string,
+): Promise<void> {
+  const login = normalizarLogin(input.login);
+  if (!login) throw new Error('usuario_vacio');
+
+  await enTransaccion(db, async (tx) => {
+    const { rowsAffected } = await tx.execute({
+      sql: 'UPDATE usuarios SET usuario = ?, clave_hash = ? WHERE id = ?',
+      args: [login, input.claveHash, input.id],
+    });
+    if (rowsAffected === 0) throw new Error('usuario_inexistente');
+
+    await registrarEvento(tx, {
+      entidad: 'usuarios', entidadId: input.id, accion: 'CREDENCIAL',
+      despues: { credencial: 'actualizada' }, actor,
+    }, en);
+  });
+}

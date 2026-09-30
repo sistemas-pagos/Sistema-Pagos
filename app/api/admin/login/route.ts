@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { isDemoMode } from '@/src/config/env';
-import { isSameOriginRequest } from '@/src/auth/guard';
+import { isSameOriginRequest, ROLES_DE_COBROS } from '@/src/auth/guard';
 import { BLOQUEO_MINUTOS, estadoDelOrigen, huellaDeOrigen, limpiarIntentos, origenDeLaPeticion, registrarFallo } from '@/src/auth/intentos';
-import { ADMIN_COOKIE_OPTIONS, ADMIN_SESSION_COOKIE, createAdminSession, verifyAdminAccessKey } from '@/src/auth/session';
+import { claveCompartidaValida, credencialValida } from '@/src/auth/credenciales';
+import { ADMIN_COOKIE_OPTIONS, ADMIN_SESSION_COOKIE, crearSesion } from '@/src/auth/session';
 import { getTursoClient } from '@/src/storage/turso-client';
 
 export const runtime = 'nodejs';
@@ -32,8 +33,16 @@ export async function POST(request: Request) {
   }
 
   const form = await request.formData();
-  const accessKey = String(form.get('accessKey') ?? '');
-  if (!verifyAdminAccessKey(accessKey)) {
+  const login = String(form.get('usuario') ?? '').trim();
+  const clave = String(form.get('accessKey') ?? '');
+
+  // Con usuario se busca la persona; sin usuario queda el respaldo de la clave
+  // compartida, que solo existe mientras ADMIN_ACCESS_KEY este configurada.
+  const sesion = login
+    ? await credencialValida(db, login, clave)
+    : claveCompartidaValida(clave);
+
+  if (!sesion) {
     const bloqueado = await registrarFallo(db, huella, ahora, ACTOR);
     const destino = bloqueado ? `/login?error=bloqueado&minutos=${BLOQUEO_MINUTOS}` : '/login?error=1';
     return NextResponse.redirect(new URL(destino, request.url), 303);
@@ -41,6 +50,10 @@ export async function POST(request: Request) {
 
   await limpiarIntentos(db, huella);
   const cookieStore = await cookies();
-  cookieStore.set(ADMIN_SESSION_COOKIE, createAdminSession(), ADMIN_COOKIE_OPTIONS);
-  return NextResponse.redirect(new URL('/admin', request.url), 303);
+  cookieStore.set(ADMIN_SESSION_COOKIE, crearSesion(sesion), ADMIN_COOKIE_OPTIONS);
+
+  // Cada quien a lo suyo: el cobrador no tiene nada que hacer en el panel y no
+  // deberia verlo ni de paso.
+  const destino = sesion.rol === 'COBRADOR' && ROLES_DE_COBROS.includes(sesion.rol) ? '/cobros' : '/admin';
+  return NextResponse.redirect(new URL(destino, request.url), 303);
 }
