@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  // Para que iOS la abra sin la barra del navegador al agregarla a inicio:
+  // Safari todavia no lee `display: standalone` del manifiesto.
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Cobros' },
   title: 'Pagos residenciales por WhatsApp | Demo',
   description: 'Automatización de cobros residenciales con WhatsApp, OCR, validación, conciliación y control de cartera.',
 };

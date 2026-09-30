@@ -1,0 +1,7 @@
+<!-- Version enmascarable: el sistema recorta un circulo, asi que el dibujo
+     vive dentro del 80% central y el fondo llega hasta el borde. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Cobros">
+  <rect width="512" height="512" fill="#08120f"/>
+  <circle cx="256" cy="256" r="110" fill="none" stroke="#6fe3b0" stroke-width="34"/>
+  <path d="M236 216h44c16 0 28 11 28 26 0 9-4 16-11 21 9 4 15 13 15 23 0 16-13 29-30 29h-46v-25h44c3 0 5-2 5-4s-2-4-5-4h-44v-23h42c3 0 5-2 5-4s-2-4-5-4h-42z" fill="#6fe3b0"/>
+</svg>
