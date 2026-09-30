@@ -19,7 +19,9 @@ const ALTA = '2026-09-01T00:00:00.000Z';
 const TELEFONO = '+50433330000';
 const AHORA = new Date('2026-09-20T12:00:00.000Z');
 /** Mas de seis horas antes de AHORA: ya no es espera normal del cron. */
-const VIEJO = '2026-09-20T02:00:00.000Z';
+// Mas de doce horas antes de AHORA: es lo que de verdad cuenta como atascado
+// desde que el umbral se fijo contra los huecos medidos del cron.
+const VIEJO = '2026-09-19T20:00:00.000Z';
 
 let db: Client;
 
@@ -115,15 +117,41 @@ describe('los recibos que no llegaron', () => {
   });
 
   /**
-   * El cron pide cada quince minutos pero corre cada ~2 horas: GitHub retrasa
-   * el schedule. Un envio de hace tres horas todavia puede estar esperando su corrida, y
-   * marcarlo seria una alarma falsa en cada recibo que se emite.
+   * El cron pide cada quince minutos pero corre cada ~5 horas: GitHub atiende el
+   * schedule cuando hay runners libres. Un envio de hace tres horas todavia
+   * puede estar esperando su corrida, y marcarlo seria una alarma falsa.
    */
   it('dos horas de espera no son una alarma: el cron no corre cada quince minutos', async () => {
     await reciboEmitido('p1', 'mov1');
     await db.execute("UPDATE envios SET actualizado_en = '2026-09-20T09:00:00.000Z'");
 
     expect(await recibosNoEntregados(db, AHORA)).toEqual([]);
+  });
+
+  /**
+   * El hueco mas largo que se midio entre corridas por `schedule` de
+   * `enviar-recibos` fue de 7 h 23 min. Con el umbral en seis horas —donde
+   * estaba— esta espera perfectamente normal salia como atascada, y **una de
+   * cada cinco** lo hacia. Es el caso que obligo a subirlo a doce.
+   */
+  it('siete horas y media de espera siguen siendo el cron, no una alarma', async () => {
+    await reciboEmitido('p1', 'mov1');
+    await db.execute("UPDATE envios SET actualizado_en = '2026-09-20T04:30:00.000Z'");
+
+    expect(await recibosNoEntregados(db, AHORA)).toEqual([]);
+  });
+
+  /**
+   * Doce horas son mas de dos corridas perdidas seguidas. Eso ya no es el cron
+   * llegando tarde: es la cola detenida, y hay que mirarlo.
+   */
+  it('pasadas las doce horas si es una alarma', async () => {
+    const numero = await reciboEmitido('p1', 'mov1');
+    await db.execute("UPDATE envios SET actualizado_en = '2026-09-19T23:00:00.000Z'");
+
+    expect((await recibosNoEntregados(db, AHORA))[0]).toMatchObject({
+      reciboNumero: numero, motivo: 'ATASCADO',
+    });
   });
 
   /**
@@ -146,8 +174,8 @@ describe('los recibos que no llegaron', () => {
   it('lo mas viejo sale primero, que es lo que lleva mas tiempo sin llegar', async () => {
     const primero = await reciboEmitido('p1', 'mov1', { codigoCasa: '18' });
     const segundo = await reciboEmitido('p2', 'mov2', { codigoCasa: '19' });
-    await envejecerEnvio(primero, '2026-09-20T04:00:00.000Z');
-    await envejecerEnvio(segundo, '2026-09-20T02:00:00.000Z');
+    await envejecerEnvio(primero, '2026-09-19T22:00:00.000Z');
+    await envejecerEnvio(segundo, '2026-09-19T18:00:00.000Z');
 
     const orden = (await recibosNoEntregados(db, AHORA)).map((fila) => fila.reciboNumero);
     expect(orden).toEqual([segundo, primero]);
