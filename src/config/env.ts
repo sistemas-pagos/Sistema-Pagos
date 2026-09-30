@@ -40,9 +40,6 @@ const envSchema = z.object({
   // no cumplen; el mensaje nombra la variable y nunca su valor.
   ADMIN_ACCESS_KEY: secretoLargo,
   AUTH_SESSION_SECRET: secretoLargo,
-  GOOGLE_SHEET_ID: optionalString,
-  GOOGLE_CLIENT_EMAIL: optionalString,
-  GOOGLE_PRIVATE_KEY: optionalString,
   WHATSAPP_VERIFY_TOKEN: optionalString,
   WHATSAPP_ACCESS_TOKEN: optionalString,
   WHATSAPP_PHONE_NUMBER_ID: optionalString,

@@ -57,36 +57,17 @@ Una migración aplicada es **inmutable**: el script guarda su `sha256` en
 `schema_migrations` y rechaza la corrida si el archivo cambió. Para modificar el esquema
 se agrega un archivo nuevo, nunca se edita uno ya aplicado.
 
-## 2. Google Cloud
+## 2. Nada de Google
 
-Crear o seleccionar un proyecto bajo la cuenta de la empresa y habilitar:
+No hace falta ninguna cuenta de Google: ni proyecto en Google Cloud, ni cuenta de servicio, ni
+hoja de cálculo, ni Drive. Turso es la única base y el panel muestra lo que antes iba a mostrar
+una hoja.
 
-- Google Sheets API.
+Esto importa al montar producción porque **es una credencial menos que existe y que habría que
+cuidar**. Si en algún momento se agrega la sincronización de solo lectura con Sheets que
+`docs/PLAN.md` deja abierta, se documentará aquí entonces.
 
-Crear una cuenta de servicio dedicada. No subir el JSON al repositorio.
-
-Variables requeridas:
-
-- `GOOGLE_CLIENT_EMAIL`
-- `GOOGLE_PRIVATE_KEY`
-
-Google Drive **no es necesario** en el MVP actual porque el cliente decidió no conservar las imágenes de los comprobantes.
-
-## 3. Google Sheets
-
-Crear una hoja privada y compartirla únicamente con la cuenta de servicio con permisos de edición.
-
-Guardar el ID como:
-
-- `GOOGLE_SHEET_ID`
-
-El backend crea/valida las pestañas operativas al iniciar el acceso de producción.
-
-La base `Viviendas` debe usar **Etapa + Bloque + Casa** como identidad. No guardar teléfonos para resolver viviendas.
-
-La pestaña `Pagos` tampoco guarda `media_id`, `receipt_file_id` ni una URL del comprobante. Sólo se conserva el hash SHA-256 y los datos estructurados extraídos.
-
-## 4. Retención de comprobantes
+## 3. Retención de comprobantes
 
 Las imágenes recibidas por WhatsApp se usan únicamente durante la solicitud:
 
@@ -101,7 +82,7 @@ No crear carpeta de Drive, Blob, S3 u otro archivo histórico mientras el client
 
 Si posteriormente el cliente autoriza retención, debe diseñarse como una función separada con política de acceso y retención explícita; no debe activarse silenciosamente.
 
-## 5. Meta / WhatsApp Cloud API
+## 4. Meta / WhatsApp Cloud API
 
 Configurar una aplicación de Meta y un número autorizado para WhatsApp Cloud API.
 
@@ -123,7 +104,7 @@ Suscribir únicamente los eventos necesarios.
 
 El número que envía el comprobante se utiliza para responder y para correlacionar temporalmente una respuesta pendiente. **Nunca se usa para inferir Etapa/Bloque/Casa.**
 
-## 6. Vercel
+## 5. Vercel
 
 Crear un proyecto con:
 
@@ -139,86 +120,109 @@ Variables de autenticación:
 - `ADMIN_ACCESS_KEY` — clave larga y aleatoria;
 - `AUTH_SESSION_SECRET` — secreto aleatorio independiente.
 
-Regla de monto:
+`ADMIN_ACCESS_KEY` es la clave compartida anterior a los usuarios por persona: existe **solo
+mientras la variable esté puesta**. Cuando el login por usuario ya funcione, borrarla de Vercel
+cierra ese camino sin tocar código ni desplegar.
 
-- `EXPECTED_PAYMENT_AMOUNT=150`
+La base y el envío de recibos:
 
-Variables opcionales de validación:
+- `PAGOS_TURSO_URL`, `PAGOS_TURSO_TOKEN` — las mismas de la sección 1;
+- `WHATSAPP_TEMPLATE_RECIBO` y `WHATSAPP_TEMPLATE_IDIOMA` — el nombre y el idioma **exactos** de
+  la plantilla aprobada en Meta. Si no coinciden, Meta rechaza el envío con 404 y el recibo queda
+  en la cola de no entregados.
+
+Beneficiario y cuenta destino, **obligatorios en producción** (invariante 4):
 
 - `EXPECTED_BENEFICIARY`;
 - `EXPECTED_ACCOUNT_LAST4`.
 
-Configurar `APP_MODE=production` únicamente en producción. Mantener previews públicas en `demo` cuando no necesiten datos reales.
+Sin ellos el sistema no puede distinguir un depósito a la cuenta del condominio de uno a
+cualquier otra cuenta, así que los comprobantes quedan en error en vez de aceptarse a ciegas.
 
-## 7. Viviendas
+`EXPECTED_PAYMENT_AMOUNT=150` es solo el respaldo mientras la tabla `cuotas` no tenga fila: la
+cuota de verdad vive en la base con su `vigente_desde`, para que un mes viejo cueste lo que
+costaba entonces.
 
-Cargar `Viviendas` con datos reales sólo en la Sheet privada.
+Configurar `APP_MODE=production` únicamente en producción. Mantener previews públicas en `demo`
+cuando no necesiten datos reales.
 
-Campos mínimos:
+## 6. Viviendas
 
-- `id`
-- `stage`
-- `block`
-- `house`
-- `monthly_fee`
-- `active`
+El padrón se carga desde el panel (`/admin/homes`) y vive en la tabla `viviendas` de Turso.
 
-`responsible` es opcional. No hay campo de teléfono para resolución de pagos.
+Campos mínimos por vivienda: **etapa, bloque y casa** —que son su identidad— y la **fecha de
+alta**, que es desde cuándo se le puede cobrar. Para el arranque, `fecha_alta = 2026-09-01`.
 
-Para el MVP la cuota bancaria esperada es L150.00. El sistema conserva por separado la cuota de la vivienda y el monto extraído del comprobante; cualquier monto distinto de L150 queda en revisión humana.
+Etapa, bloque y casa son texto y admiten letras. El código compacto (`E1B4C18`) se deriva de los
+tres y es único.
 
-## 8. Histórico inicial
+**No hay campo de teléfono en el padrón.** El teléfono se guarda con el pago, para mandar el
+recibo, y nunca sirve para deducir la vivienda (invariante 1).
 
-Agosto 2026 es la base del histórico de depósitos:
+Sin padrón cargado no se puede cobrar nada: un pago necesita una casa a la cual asignarse.
 
-- depósitos del 1 al 14 de agosto → julio 2026;
-- depósitos del 15 al 31 de agosto → agosto 2026;
-- desde septiembre, el sistema aplica el depósito al primer mes **no verificado como pagado** desde agosto;
-- un comprobante sólo recibido o en revisión no hace avanzar el histórico;
-- si llega otro comprobante mientras el primer mes sigue sin verificar, ambos quedan vinculados al mismo mes pendiente y el conflicto requiere revisión;
-- los pagos en efectivo se incorporarán posteriormente mediante un flujo manual separado.
+## 7. Saldo inicial y mes base
 
-Antes de cargar datos reales, validar el histórico en una copia privada/controlada de la Sheet.
+**Septiembre de 2026 es el primer mes de servicio.** Quien no pague septiembre queda moroso, y
+antes de septiembre el sistema no asigna ningún mes.
 
-## 9. Verificación bancaria
+La deuda anterior **no se carga como meses ni como pagos**. Entra una sola vez por vivienda como
+un `ajustes` de tipo `SALDO_INICIAL`, que se importa desde `/admin/saldos`. Cargarla como meses
+obligaría a inventar en qué mes cayó cada lempira de una deuda que nadie llevó al día.
 
-El MVP **no necesita acceso a la banca en línea**.
+La prórroga del mes base —hasta el 14 de octubre de 2026— es **única** y se guarda como dato del
+período. No se repite en los meses siguientes y no va escrita en el código: una excepción de
+calendario incrustada en el código es justamente lo que la fase 3 vino a eliminar.
 
-El encargado:
+La regla especial de agosto de 2026 que aparecía en versiones anteriores de esta guía (depósitos
+del 1 al 14 asignados a julio) **ya no existe** y no debe reintroducirse.
 
-1. revisa el movimiento por su cuenta en BAC;
-2. compara banco, monto, fecha y referencia disponibles;
-3. en el panel pulsa `Verificar` o `Verifiqué en banco` sólo si el caso es elegible.
+## 8. Verificación bancaria
 
-Un monto menor o mayor de L150, un conflicto de mes o evidencia de reutilización del mismo movimiento permanecen en revisión aunque el movimiento exista en BAC. Primero debe resolverse la excepción correcta; el botón de verificación no la debe borrar.
+El sistema **no necesita acceso a la banca en línea**, ni ahora ni después.
 
-No almacenar usuario, contraseña, PIN, token OTP ni códigos de BAC en Vercel, Google Sheets, GitHub o el navegador.
+El camino normal es el extracto: el tesorero descarga el CSV de BAC y lo manda por WhatsApp desde
+un número que esté en `usuarios` con rol ADMIN o TESORERO. El sistema importa los movimientos sin
+duplicarlos, responde un resumen y aplica cuando el tesorero confirma; la confirmación expira
+(`PAGOS_CONFIRMACION_MINUTOS`, dos horas por defecto) para que un "SI" de mañana no aplique un
+extracto contra pagos que ya cambiaron.
 
-Una integración futura puede usar un archivo/API bancaria autorizada. Para verificación automática la fuente debe proporcionar un identificador estable del movimiento. El sistema persiste `bank_movement_id` y no permite que ese movimiento verifique dos pagos distintos, ni en la misma corrida ni en una posterior.
+También se puede verificar desde el panel después de revisar el movimiento por cuenta propia. En
+los dos casos, un monto que no es múltiplo de la cuota, un conflicto de mes o un movimiento ya
+usado permanecen en revisión: primero se resuelve la excepción, el botón de verificar no la borra.
 
-## 10. Validación antes de operar
+Cada pago verificado guarda su `movimiento_id`, que es UNIQUE. Un movimiento del banco no puede
+verificar dos pagos, ni en la misma corrida ni en otra.
+
+No almacenar usuario, contraseña, PIN, token OTP ni códigos de BAC en Vercel, GitHub, el navegador
+ni en ningún archivo del repositorio.
+
+## 9. Validación antes de operar
 
 - webhook challenge funciona;
 - firma inválida retorna 401;
 - archivo no imagen se rechaza;
 - comprobante BAC sintético/de prueba controlada se procesa;
 - la imagen no queda archivada después del procesamiento;
-- no existen columnas `media_id` ni `receipt_file_id` en `Pagos`;
+- el pago no guarda `media_id` ni ninguna referencia que permita abrir la imagen;
 - retry del mismo `message_id` no duplica;
 - comprobante con E/B/C completos valida la vivienda;
 - comprobante que omite cualquiera de Etapa/Bloque/Casa pide los tres datos;
 - respuesta `E1 B4 C18` asigna la vivienda sin repetir OCR;
 - el teléfono remitente no asigna vivienda;
-- monto exactamente L150 sigue a verificación bancaria;
-- monto menor o mayor de L150 pasa a revisión y no puede verificarse por el atajo manual;
-- depósito de septiembre con agosto no verificado se mantiene en agosto;
-- depósito de septiembre con agosto ya `VERIFICADO` se aplica a septiembre;
+- monto igual a la cuota vigente sigue a verificación bancaria;
+- monto que no es múltiplo de la cuota pasa a revisión y no puede verificarse por el atajo manual;
+- depósito de octubre con septiembre sin verificar se mantiene en septiembre;
+- depósito de octubre con septiembre ya `VERIFICADO` se aplica a octubre;
+- nada se asigna a un mes anterior a septiembre de 2026;
 - una vivienda sólo aparece pagada después de `VERIFICADO`;
 - referencia repetida pasa a revisión y no se descarta automáticamente;
 - archivo exacto reenviado no incrementa recaudación gracias al hash persistido;
 - panel permite verificación bancaria manual sólo para pagos elegibles;
 - un conflicto de período no puede verificarse hasta corregirse;
 - un `bank_movement_id` ya usado no verifica otro pago;
-- panel requiere login;
-- la Sheet no es pública;
-- `VERIFICADO` sólo aparece tras una confirmación bancaria explícita.
+- panel requiere login, y el cobrador entra a `/cobros` pero no al panel;
+- un cobro en efectivo emite recibo y su número queda anotado en el talonario;
+- el cobrador no puede cerrar su propia caja;
+- `VERIFICADO` sólo aparece tras una confirmación bancaria explícita, o tras el cierre de caja de
+  un cobro en efectivo.

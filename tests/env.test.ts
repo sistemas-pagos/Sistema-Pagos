@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LARGO_MINIMO_SECRETO, env, resetEnvForTests } from '@/src/config/env';
 
@@ -90,5 +91,32 @@ describe('variables de entorno', () => {
     resetEnvForTests();
 
     expect(env().ADMIN_ACCESS_KEY).toHaveLength(LARGO_MINIMO_SECRETO);
+  });
+});
+
+/**
+ * Lo que el repositorio pide que alguien configure.
+ *
+ * Una variable declarada es una promesa: quien monta produccion la va a buscar,
+ * la va a crear y, si es una credencial, la va a tener que cuidar. Tres
+ * `GOOGLE_*` vivieron en el contrato mucho despues de que el ultimo modulo que
+ * hablaba con Google desapareciera, y la guia de produccion mandaba a crear una
+ * cuenta de servicio para nada.
+ *
+ * Se lee el archivo como texto a proposito: una variable opcional que nadie
+ * configuro no aparece en el objeto que devuelve `env()`, asi que mirar el
+ * resultado no probaria nada.
+ */
+describe('el contrato de entorno no pide lo que no usa', () => {
+  const contrato = readFileSync(new URL('../src/config/env.ts', import.meta.url), 'utf8');
+
+  it('no declara ninguna variable de Google', () => {
+    expect(contrato).not.toMatch(/GOOGLE_/);
+  });
+
+  it('el proyecto no depende de googleapis', () => {
+    const paquete = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    const todas = { ...paquete.dependencies, ...paquete.devDependencies };
+    expect(Object.keys(todas)).not.toContain('googleapis');
   });
 });
