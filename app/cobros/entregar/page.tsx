@@ -77,7 +77,7 @@ function Fila({ cobro }: { cobro: CobroSinEntregar }) {
   return (
     <li>
       <div className="cob__casa">
-        <span>
+        <span className="cob__datos">
           <span className="cob__codigo">{cobro.vivienda}</span>
           <span className="cob__meta">
             {cobro.reciboNumero ? formatoRecibo(cobro.reciboNumero) : 'Sin recibo · en revisión'}
