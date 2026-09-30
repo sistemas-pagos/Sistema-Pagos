@@ -58,6 +58,29 @@ export function montoEnLempiras(centavos: number): string {
 }
 
 /**
+ * El camino de vuelta: lo que una persona teclea, en centavos enteros.
+ *
+ * Se parsea como texto y **sin pasar por coma flotante**: `29.99 * 100` en
+ * JavaScript da 2998.9999999999995, y redondear eso funciona hasta que un dia
+ * no. Con el entero y los decimales por separado no hay nada que redondear.
+ *
+ * Acepta el separador de miles porque la gente lo escribe, pero **solo donde de
+ * verdad separa miles**: `1,500` son mil quinientos y `150,50` no es nada. No
+ * distinguirlos convertia `150,50` —la forma europea, que alguien va a
+ * escribir— en L15,050.00, cien veces mas, sin avisar. En un campo de dinero eso
+ * no puede quedar a la suerte: lo que no se entiende se rechaza.
+ */
+export function centavosDesdeLempiras(valor: string): number | undefined {
+  const escrito = valor.trim().replace(/^L\s*/i, '');
+  const conMiles = /^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(escrito);
+  const sinMiles = /^\d{1,9}(\.\d{1,2})?$/.test(escrito);
+  if (!conMiles && !sinMiles) return undefined;
+
+  const [entero, decimales = ''] = escrito.replace(/,/g, '').split('.');
+  return Number(entero) * 100 + Number(decimales.padEnd(2, '0'));
+}
+
+/**
  * Los meses que cubre el pago, en palabras. Un monto multiplo de la cuota se
  * reparte en varios meses atrasados (invariante 6), asi que el recibo tiene que
  * poder nombrar mas de uno.

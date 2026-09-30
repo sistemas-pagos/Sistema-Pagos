@@ -6,6 +6,7 @@ import { periodLabel } from '@/src/domain/periods';
 import { homeCode } from '@/src/domain/housing';
 import { formatoRecibo } from '@/src/domain/recibo';
 import { mesesCobrables } from '@/src/services/cobro-efectivo';
+import type { PaymentRecord } from '@/src/domain/types';
 import { getPaymentStore } from '@/src/storage';
 
 /**
@@ -21,12 +22,23 @@ import { getPaymentStore } from '@/src/storage';
  */
 export const dynamic = 'force-dynamic';
 
+/** Los que ya no cuentan: sobre un pago liberado no hay nada que contar. */
+const LIBERAN = new Set<PaymentRecord['status']>(['NO_ENCONTRADO', 'RECHAZADO', 'DUPLICADO', 'ANULADO']);
+
+const ESTADO_CORTO: Partial<Record<PaymentRecord['status'], string>> = {
+  VERIFICADO: 'verificado',
+  EFECTIVO_COBRADO: 'cobrado en efectivo',
+  PENDIENTE_VERIFICACION: 'por verificar',
+  EN_REVISION: 'en revisión',
+  ESPERANDO_RESPUESTA: 'esperando respuesta',
+};
+
 const money = (centavos: number) =>
   `L${(centavos / 100).toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 interface Params {
   params: Promise<{ vivienda: string }>;
-  searchParams: Promise<{ mes?: string; error?: string; recibo?: string; revision?: string }>;
+  searchParams: Promise<{ mes?: string; error?: string; recibo?: string; revision?: string; nota?: string }>;
 }
 
 export default async function CobrarCasaPage({ params, searchParams }: Params) {
@@ -101,6 +113,12 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
 
       {query.error && <p className="cob__error" role="alert">{query.error}</p>}
 
+      {query.nota && (
+        <div className="cob__nota">
+          Tu nota quedó guardada. El administrador la ve en su bandeja; el pago no cambió de estado.
+        </div>
+      )}
+
       {pagados.length > 0 && (
         <div className="cob__nota cob__nota--aviso">
           <strong>Ya pagó {pagados.map((mes) => periodLabel(mes.periodo)).join(', ')}.</strong>{' '}
@@ -154,7 +172,54 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
           </div>
         </form>
       )}
+
+      <Notas viviendaId={home.id} pagos={suyos} />
     </main>
+  );
+}
+
+/**
+ * Lo que el cobrador puede decir sobre un pago que no puede tocar.
+ *
+ * No muestra monto ni depositante: el cobrador necesita identificar **cual** de
+ * los pagos de esta casa le llama la atencion, y para eso alcanzan el mes y el
+ * estado (invariante 12).
+ */
+function Notas({ viviendaId, pagos }: { viviendaId: string; pagos: readonly PaymentRecord[] }) {
+  const recientes = [...pagos]
+    .filter((pago) => !LIBERAN.has(pago.status))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 5);
+
+  if (recientes.length === 0) return null;
+
+  return (
+    <form className="cob__card" method="post" action={`/api/cobros/${viviendaId}/nota`}>
+      <p className="cob__eyebrow" style={{ marginBottom: 10 }}>¿Algo no cuadra con un pago?</p>
+
+      {recientes.map((pago, indice) => (
+        <div className="cob__mes" key={pago.id} style={{ marginBottom: 10 }}>
+          <input type="radio" id={`nota-${pago.id}`} name="pagoId" value={pago.id} defaultChecked={indice === 0} />
+          <label htmlFor={`nota-${pago.id}`}>
+            {periodLabel(pago.period)} · {ESTADO_CORTO[pago.status] ?? pago.status}
+          </label>
+        </div>
+      ))}
+
+      <div className="cob__campo">
+        <label htmlFor="texto">Contale al administrador</label>
+        <textarea id="texto" name="texto" required maxLength={500} placeholder="Ej.: el vecino dice que su hijo ya transfirió desde otra cuenta." />
+      </div>
+
+      <p className="cob__quien">
+        La nota no cambia el pago ni el estado de la casa. Vos no podés corregir un pago: dejás escrito
+        lo que viste y el administrador decide.
+      </p>
+
+      <div className="cob__acciones">
+        <button className="cob__boton cob__boton--plano" type="submit">Guardar nota</button>
+      </div>
+    </form>
   );
 }
 

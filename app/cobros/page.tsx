@@ -108,7 +108,8 @@ export default async function CobrosPage({ searchParams }: { searchParams: Promi
           {porEntregar.cobros === 1 ? 'cobro' : 'cobros'} sin entregar.
           {porEntregar.enRevisionCentavos > 0 && (
             <> Incluye {money(porEntregar.enRevisionCentavos)} en revisión, que también tenés vos.</>
-          )}
+          )}{' '}
+          <Link href="/cobros/entregar">Ver la hoja de entrega</Link>
         </div>
       )}
 
