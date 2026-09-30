@@ -22,16 +22,30 @@ import type { Client } from '@libsql/client';
 /**
  * Cuanto puede estar un envio en PENDIENTE antes de que sea una senal.
  *
- * El cron pide cada quince minutos, pero **no corre asi**. Medido sobre las
- * corridas reales de `enviar-recibos`, los huecos son de ~2 horas: el
- * `schedule` de GitHub Actions es best-effort y se retrasa cuando la cola de
- * runners esta cargada. Un umbral de una hora marcaria como atascado a todos
- * los envios normales, y una pantalla que siempre alarma no la mira nadie.
+ * El cron pide cada quince minutos, pero **no corre asi**: el `schedule` de
+ * GitHub Actions es best-effort y se atiende cuando hay runners libres.
  *
- * Seis horas son unas tres corridas perdidas. Lo que de verdad responde rapido
- * es el encadenamiento con `Procesar comprobantes`, no el cron.
+ * Medido sobre 19 huecos consecutivos de las corridas por `schedule` de
+ * `enviar-recibos`: promedio **4 h 51 min**, minimo 2 h 15 min, maximo
+ * **7 h 23 min**. Antes dije ~2 horas y estaba mal por menos de la mitad.
+ *
+ * De ahi salen las doce horas, y no un numero redondo cualquiera:
+ *
+ * - con una hora, los 19 huecos la superan — la pantalla estaria siempre roja;
+ * - con seis, la superan 4 de 19: **una de cada cinco esperas normales** seria
+ *   una alarma falsa;
+ * - con doce, ninguna. Son mas de dos corridas perdidas seguidas, que ya no es
+ *   el cron llegando tarde sino la cola detenida.
+ *
+ * Una pantalla que alarma sin motivo deja de mirarse, y entonces el dia que
+ * alarme de verdad tampoco se mira. Por eso el umbral se elige contra los
+ * huecos medidos y no contra los declarados.
+ *
+ * Esto solo alcanza a los envios que esperan al cron —los que fallaron y van a
+ * reintento—. El recibo normal sale en un minuto, encadenado a `Procesar
+ * comprobantes`.
  */
-export const MINUTOS_PARA_ATASCADO = 360;
+export const MINUTOS_PARA_ATASCADO = 720;
 
 export type MotivoNoEntregado = 'FALLIDO' | 'ATASCADO';
 
