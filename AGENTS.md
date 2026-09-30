@@ -46,13 +46,15 @@ banking data, credentials, service-account files or secrets.
 
 ## Data and security
 
-- Turso is the single source of truth (`docs/PLAN.md` section 1). Google Sheets is a
-  read-only destination for dashboards and listings; it stops being storage in phase 7,
-  so `src/storage/google-sheets.ts` is still in use until then.
-- Production Google Sheets remains private and server-side; Google Drive is not required while receipt retention is disabled.
+- Turso is the single source of truth (`docs/PLAN.md` section 1). **No Google service is wired
+  up:** the Sheets storage module is gone, no code imports `googleapis`, and the environment
+  contract declares no `GOOGLE_*` variable. Section 1 of the plan still wants Sheets as a
+  read-only destination for dashboards, but nothing has been built for it — do not describe it as
+  if it existed, and do not add a Google dependency or credential without asking first.
+- Receipt images are not retained, so no object storage (Drive, S3, Blob) is required or allowed.
 - WhatsApp webhook signature validation and file type/size/magic-byte validation must remain fail-closed.
-- Never put Meta/Google/BAC credentials in Git, docs, fixtures, logs, screenshots, or public demo output.
-- Preserve production/preview separation. Repository secrets belong to this project only: `WHATSAPP_*`, `META_*`, `PAGOS_*`, `GOOGLE_SHEETS_*`.
+- Never put Meta/BAC credentials in Git, docs, fixtures, logs, screenshots, or public demo output.
+- Preserve production/preview separation. Repository secrets belong to this project only: `WHATSAPP_*`, `META_*`, `PAGOS_*`.
 - Turso credentials live in the `pagos-produccion` Environment as `PAGOS_TURSO_URL` and `PAGOS_TURSO_TOKEN`. Never in code, logs or fixtures.
 
 ## Validation
