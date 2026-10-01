@@ -119,9 +119,16 @@ body:has(.cob) {
 
 .cob__acciones { display: flex; gap: 10px; margin-top: 14px; }
 
+/*
+ * El `flex` vive en `.cob__acciones` y no aca.
+ *
+ * Estaba en la clase base para que dos botones en fila se repartieran el
+ * ancho. Pero `.cob` es una columna de `100dvh`, asi que un boton suelto
+ * —el «Cobrar otra casa» de la pantalla de recibo— se tragaba todo el alto
+ * sobrante: un bloque verde de media pantalla.
+ */
 .cob__boton,
 .cob__boton:visited {
-  flex: 1 1 auto;
   background: var(--menta);
   color: var(--sobre-menta);
   border: 0;
@@ -143,8 +150,11 @@ body:has(.cob) {
   background: transparent;
   color: var(--apagado);
   border: 1px solid var(--borde);
-  flex: 0 0 auto;
 }
+
+/* En fila se reparten el ancho; el secundario se queda con lo suyo. */
+.cob__acciones .cob__boton { flex: 1 1 auto; }
+.cob__acciones .cob__boton--plano { flex: 0 0 auto; }
 
 .cob__conteo {
   font-size: .85rem;
@@ -259,9 +269,17 @@ body:has(.cob) {
   text-align: center;
 }
 
+/*
+ * El numero entero en una linea, siempre.
+ *
+ * `REC-000001` son diez caracteres y a 390 px se partia en dos. Es el dato que
+ * el cobrador lee en voz alta y copia en su talonario delante del vecino:
+ * partido se lee mal y se copia peor.
+ */
 .cob__recibo b {
   display: block;
-  font-size: clamp(2.5rem, 14vw, 3.4rem);
+  white-space: nowrap;
+  font-size: clamp(1.6rem, 9.2vw, 3.4rem);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   letter-spacing: .02em;
@@ -283,4 +301,31 @@ body:has(.cob) {
 @media (min-width: 640px) {
   .cob { padding: 28px; max-width: 720px; margin: 0 auto; }
   .cob__filtros { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/*
+ * Los datos del recibo, en dos columnas: etiqueta y valor.
+ *
+ * El cobrador lo lee en voz alta mientras el vecino mira — por eso el valor va
+ * alineado a la derecha y con cifras de ancho fijo, que es lo que deja comparar
+ * un monto con el papel del talonario sin contar digitos.
+ */
+.cob__detalle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  background: var(--tarjeta);
+  border: 1px solid var(--linea);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.cob__detalle dt { color: var(--apagado); font-size: .85rem; }
+
+.cob__detalle dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
