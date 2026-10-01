@@ -30,8 +30,23 @@ const P = 1;
 const LARGO_SAL = 16;
 const LARGO_CLAVE = 32;
 
-/** El largo minimo lo decide quien crea el usuario, no esta funcion. */
-export const LARGO_MINIMO_CLAVE = 12;
+/**
+ * El minimo de una clave que una persona escribe de memoria.
+ *
+ * Ocho y no doce porque la clave no esta sola: el panel bloquea quince minutos
+ * tras cinco intentos fallidos (`src/auth/intentos.ts`), o sea unos 480 intentos
+ * por dia. Contra ese techo, lo que decide no es el largo sino lo adivinable.
+ *
+ * Ocho tampoco es cero, y la cuenta explica por que hay piso: un PIN de cuatro
+ * digitos son 10.000 combinaciones y a 480 por dia **cae en tres semanas**,
+ * bloqueo incluido. Las mil claves mas usadas caen en dos dias. Ocho caracteres
+ * que no sean una palabra sola no caen nunca por fuerza bruta.
+ *
+ * Esto es el piso del formato. Quien crea el usuario elige la clave, y lo que
+ * de verdad la sostiene es que no sea el nombre del cobrador ni el del
+ * residencial.
+ */
+export const LARGO_MINIMO_CLAVE = 8;
 
 /**
  * `scrypt:N:r:p:sal:hash`, todo en una columna de texto.
