@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { isAdminAuthenticated } from '@/src/auth/guard';
+import { isAdminAuthenticated, ROLES_DE_COBROS, tieneRol } from '@/src/auth/guard';
 import { compareHomeParts, normalizeHomePart } from '@/src/domain/housing';
 import { periodFromDate, isPeriod, periodLabel } from '@/src/domain/periods';
 import type { MonthlyCollectionStatus } from '@/src/domain/types';
@@ -58,6 +58,10 @@ export default async function AdminPage({
   searchParams: Promise<{ period?: string; stage?: string; block?: string }>;
 }) {
   if (!(await isAdminAuthenticated())) redirect('/login');
+  // El boton se muestra solo a quien la pantalla de cobros deja entrar. Un
+  // TESORERO llega al panel pero no a /cobros: ofrecerle el enlace seria
+  // mandarlo a un redirect.
+  const entraACobros = await tieneRol(...ROLES_DE_COBROS);
   const params = await searchParams;
   const period = params.period && isPeriod(params.period) ? params.period : periodFromDate();
   const stageFilter = homeFilter(params.stage);
@@ -85,6 +89,7 @@ export default async function AdminPage({
           <Link className="primary-button" href="/admin/recibos">Recibos no entregados</Link>
           <Link className="primary-button" href="/admin/caja">Cierre de caja</Link>
           <Link className="primary-button" href="/admin/notas">Notas del cobrador</Link>
+          {entraACobros && <Link className="primary-button" href="/cobros">Cobrar en efectivo</Link>}
           <form method="post" action="/api/admin/logout"><button className="scenario-button" type="submit">Cerrar sesión</button></form>
         </div>
       </header>

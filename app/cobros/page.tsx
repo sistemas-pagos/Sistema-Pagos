@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import './cobros.css';
-import { ROLES_DE_COBROS, sesionActual, tieneRol } from '@/src/auth/guard';
+import { ROLES_DEL_PANEL, ROLES_DE_COBROS, sesionActual, tieneRol } from '@/src/auth/guard';
 import { isDemoMode } from '@/src/config/env';
 import { periodFromDate, periodLabel, isPeriod } from '@/src/domain/periods';
 import { normalizeHomePart } from '@/src/domain/housing';
@@ -74,6 +74,7 @@ export default async function CobrosPage({ searchParams }: { searchParams: Promi
     busqueda: params.q,
   });
 
+  const vuelveAlPanel = sesion !== undefined && ROLES_DEL_PANEL.includes(sesion.rol);
   const opciones = opcionesDeFiltro(homes);
   const porEntregar = isDemoMode() || !sesion
     ? { totalCentavos: 0, cobros: 0, enRevisionCentavos: 0 }
@@ -97,9 +98,16 @@ export default async function CobrosPage({ searchParams }: { searchParams: Promi
           <h1 className="cob__title">{periodLabel(periodo)}</h1>
           <p className="cob__quien">{sesion?.uid}</p>
         </div>
-        <form method="post" action="/api/admin/logout">
-          <button className="cob__boton cob__boton--plano" type="submit">Salir</button>
-        </form>
+        <div className="cob__acciones">
+          {/*
+            El camino de vuelta, solo para quien tiene panel. El cobrador no lo
+            ve porque no tiene a donde volver: /admin lo rebota por rol.
+          */}
+          {vuelveAlPanel && <Link className="cob__boton cob__boton--plano" href="/admin">Panel</Link>}
+          <form method="post" action="/api/admin/logout">
+            <button className="cob__boton cob__boton--plano" type="submit">Salir</button>
+          </form>
+        </div>
       </header>
 
       {porEntregar.cobros > 0 && (
