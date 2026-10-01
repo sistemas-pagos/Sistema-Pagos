@@ -68,7 +68,9 @@ describe('guardar y releer un pago', () => {
     const original = pago();
     await guardar(store, original);
 
-    expect(await store.getPayment('pay-1')).toEqual(original);
+    // `periods` no se guarda en `pagos`: sale de `pago_meses`, y un pago recien
+    // guardado todavia no reservo ningun mes.
+    expect(await store.getPayment('pay-1')).toEqual({ ...original, periods: [] });
   });
 
   /**
@@ -104,7 +106,7 @@ describe('guardar y releer un pago', () => {
 
     await store.updatePayment(verificado, { actor: 'prueba', motivo: 'verificado a mano' });
 
-    expect(await store.getPayment('pay-1')).toEqual(verificado);
+    expect(await store.getPayment('pay-1')).toEqual({ ...verificado, periods: [] });
   });
 
   it('se queja si el pago que se actualiza no existe', async () => {

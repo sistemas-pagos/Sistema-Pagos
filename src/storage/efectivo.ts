@@ -56,16 +56,27 @@ export async function registrarCobroEnEfectivo(
   const montoCentavos = totalDe(cobro.meses);
   if (montoCentavos <= 0) throw new Error('cobro_sin_monto');
 
+  // El mes mas viejo de los cobrados. `pagos.periodo` guarda uno solo —es la
+  // convencion que ya usa la transferencia, donde `assignPeriod` devuelve un
+  // mes y `pago_meses` guarda todos— y sin el, el cobro en efectivo queda
+  // invisible para el listado, el panel y el estado mensual, que filtran por
+  // esa columna. `seleccionarMeses` ya los entrega del mas viejo al mas nuevo.
+  const periodo = cobro.meses.reduce(
+    (masViejo, mes) => (mes.periodo < masViejo ? mes.periodo : masViejo),
+    cobro.meses[0].periodo,
+  );
+
   return enTransaccion(db, async (tx) => {
     await tx.execute({
       sql: `INSERT INTO pagos (
-              id, metodo, vivienda_id, monto_centavos, estado, fecha_pago,
+              id, metodo, vivienda_id, monto_centavos, estado, periodo, fecha_pago,
               telefono_contacto, acepta_whatsapp, cobrador_id, creado_en, actualizado_en
-            ) VALUES (?, 'EFECTIVO', ?, ?, 'EFECTIVO_COBRADO', ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, 'EFECTIVO', ?, ?, 'EFECTIVO_COBRADO', ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         cobro.pagoId,
         cobro.viviendaId,
         montoCentavos,
+        periodo,
         cobro.fechaPago,
         cobro.telefono ?? null,
         cobro.aceptaWhatsapp ? 1 : 0,

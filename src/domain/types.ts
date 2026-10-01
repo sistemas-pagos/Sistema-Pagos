@@ -100,6 +100,13 @@ export interface PaymentRecord {
   house?: string;
   /** Service month paid, YYYY-MM. */
   period: string;
+  /**
+   * Every month this payment actually holds, from `pago_meses` — the source of
+   * truth for month assignment (invariant 5). `period` keeps one month only, so
+   * a payment covering several (invariant 6) is read wrong through it. Empty
+   * when the payment holds no month yet, or from a store without `pago_meses`.
+   */
+  periods?: readonly string[];
   status: PaymentStatus;
   /** SHA-256 of the transient receipt bytes; the image itself is not retained. */
   fileHash: string;

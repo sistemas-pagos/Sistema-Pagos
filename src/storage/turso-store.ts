@@ -68,6 +68,7 @@ function aPago(fila: Row): PaymentRecord {
     block: texto(fila.bloque),
     house: texto(fila.casa),
     period: String(fila.periodo ?? ''),
+    periods: fila.periodos == null ? [] : String(fila.periodos).split(','),
     status: String(fila.estado) as PaymentStatus,
     fileHash: String(fila.archivo_sha256 ?? ''),
     duplicateOf: texto(fila.duplicado_de),
@@ -79,9 +80,19 @@ function aPago(fila: Row): PaymentRecord {
   };
 }
 
-/** El `JOIN` trae la vivienda porque el pago la guarda por id, no por E/B/C. */
+/**
+ * El `JOIN` trae la vivienda porque el pago la guarda por id, no por E/B/C.
+ *
+ * Y la subconsulta trae los meses que el pago tiene tomados de verdad.
+ * `pagos.periodo` guarda uno solo: con un pago que cubre varios meses
+ * (invariante 6) leerlo por ahi deja los demas como si nadie los hubiera
+ * pagado, y al cobrador en la puerta eso le hace cobrar dos veces.
+ */
 const SELECT_PAGO = `
-  SELECT p.*, v.etapa, v.bloque, v.casa
+  SELECT p.*, v.etapa, v.bloque, v.casa,
+         (SELECT group_concat(pm.periodo, ',')
+            FROM pago_meses pm
+           WHERE pm.pago_id = p.id AND pm.estado IN ('RESERVADO', 'PAGADO')) AS periodos
   FROM pagos p LEFT JOIN viviendas v ON v.id = p.vivienda_id`;
 
 function aVivienda(fila: Row, cuotaPorDefecto: number): HomeRecord {

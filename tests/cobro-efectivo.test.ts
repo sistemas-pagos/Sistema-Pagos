@@ -319,3 +319,75 @@ describe('el detalle del recibo', () => {
     expect(await detalleDeRecibo(db, 99_999)).toBeUndefined();
   });
 });
+
+/**
+ * El cobro en efectivo tiene que quedar escrito donde el resto del sistema mira.
+ *
+ * `registrarCobroEnEfectivo` llenaba `pago_meses` pero dejaba `pagos.periodo`
+ * en NULL, y el listado, el panel y el estado mensual filtran por esa columna.
+ * Resultado: la casa seguia apareciendo «sin pago este mes» despues de pagar,
+ * y la pantalla le ofrecia al cobrador cobrarle el mismo mes otra vez.
+ */
+describe('el cobro en efectivo no queda invisible', () => {
+  const base = {
+    viviendaId: 'v1', cobradorId: 'u-cobrador',
+    fechaPago: '2026-10-15', plantilla: PLANTILLA, creadoEn: EN,
+    aceptaWhatsapp: false,
+  };
+
+  const mes = (periodo: string) => ({ periodo, montoCentavos: CUOTA_CENTAVOS });
+
+  async function periodoGuardado(pagoId: string): Promise<string | null> {
+    const { rows } = await db.execute({ sql: 'SELECT periodo FROM pagos WHERE id = ?', args: [pagoId] });
+    return rows[0].periodo == null ? null : String(rows[0].periodo);
+  }
+
+  it('escribe el periodo del pago', async () => {
+    await registrarCobroEnEfectivo(db, { ...base, pagoId: 'p-uno', meses: [mes('2026-09')] }, ACTOR);
+
+    expect(await periodoGuardado('p-uno')).toBe('2026-09');
+  });
+
+  /** Con varios meses manda el mas viejo: la deuda se salda en orden. */
+  it('con varios meses guarda el mas viejo', async () => {
+    await registrarCobroEnEfectivo(
+      db,
+      { ...base, pagoId: 'p-dos', meses: [mes('2026-10'), mes('2026-09')] },
+      ACTOR,
+    );
+
+    expect(await periodoGuardado('p-dos')).toBe('2026-09');
+  });
+});
+
+/**
+ * La defensa de la puerta: un mes ya cobrado no se vuelve a ofrecer.
+ *
+ * Se apoyaba en `pago.period`, que guarda un mes solo. Un cobro de septiembre
+ * y octubre dejaba octubre como cobrable, asi que el cobrador podia pedir esa
+ * plata de nuevo — y el vecino pagarla.
+ */
+describe('un mes ya cobrado no se puede volver a cobrar', () => {
+  it('marca todos los meses del pago, no solo el que guarda period', () => {
+    const cobrado = pago({
+      id: 'p-efectivo', method: 'EFECTIVO', status: 'EFECTIVO_COBRADO',
+      period: '2026-09', periods: ['2026-09', '2026-10'], amount: 300,
+    });
+
+    const cobrables = mesesCobrables(CASA, [cobrado], HOY);
+
+    expect(cobrables.filter((mes) => mes.yaPagado).map((mes) => mes.periodo))
+      .toEqual(['2026-09', '2026-10']);
+  });
+
+  it('y seleccionarMeses rechaza el que ya esta pagado', () => {
+    const cobrado = pago({
+      id: 'p-efectivo', method: 'EFECTIVO', status: 'EFECTIVO_COBRADO',
+      period: '2026-09', periods: ['2026-09', '2026-10'],
+    });
+
+    const cobrables = mesesCobrables(CASA, [cobrado], HOY);
+
+    expect(() => seleccionarMeses(cobrables, ['2026-10'])).toThrow(CobroInvalido);
+  });
+});
