@@ -1,3 +1,4 @@
+import { mesesDelPago } from '@/src/services/period-assignment';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { isAdminAuthenticated } from '@/src/auth/guard';
@@ -25,8 +26,8 @@ export default async function HousePage({ params }: { params: Promise<{ stage: s
   if (!homeRecord) notFound();
 
   const accepted = history.payments.filter((payment) => payment.status !== 'DUPLICADO' && payment.status !== 'RECHAZADO');
-  const verifiedPeriods = new Set(accepted.filter((payment) => payment.status === 'VERIFICADO').map((payment) => payment.period));
-  const receiptPeriods = new Set(accepted.map((payment) => payment.period));
+  const verifiedPeriods = new Set(accepted.filter((payment) => payment.status === 'VERIFICADO').flatMap((payment) => mesesDelPago(payment)));
+  const receiptPeriods = new Set(accepted.flatMap((payment) => mesesDelPago(payment)));
 
   return (
     <main className="shell">

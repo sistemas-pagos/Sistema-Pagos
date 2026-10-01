@@ -1,6 +1,7 @@
 import { compareHomeParts, homeLabel } from '@/src/domain/housing';
 import { homeKey, type DashboardSnapshot, type PaymentRecord } from '@/src/domain/types';
 import { deriveMonthlyHomeStatus, isHomeActiveInPeriod } from '@/src/services/monthly-status';
+import { mesesDelPago } from '@/src/services/period-assignment';
 import type { PaymentStore } from '@/src/storage/types';
 
 const RECEIVED_STATUSES = new Set<PaymentRecord['status']>([
@@ -20,7 +21,7 @@ export async function buildDashboardSnapshot(store: PaymentStore, period: string
   const homes = allHomes.filter((home) => isHomeActiveInPeriod(home, period));
   const activeHomeKeys = new Set(homes.map(homeKey));
   const homesByKey = new Map(homes.map((home) => [homeKey(home), home]));
-  const allPayments = storedPayments.filter((payment) => payment.period === period);
+  const allPayments = storedPayments.filter((payment) => mesesDelPago(payment).includes(period));
   const monthlyStatus = deriveMonthlyHomeStatus(homes, allPayments, period);
   const received = accountingPayments(allPayments).filter(isReceived);
   const assigned = received.filter((payment) => payment.stage != null && payment.block != null && payment.house != null);

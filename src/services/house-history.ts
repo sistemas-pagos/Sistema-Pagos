@@ -1,3 +1,4 @@
+import { mesesDelPago } from '@/src/services/period-assignment';
 import { periodWindow } from '@/src/domain/periods';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 import type { PaymentStore } from '@/src/storage/types';
@@ -27,7 +28,7 @@ function activeInPeriod(home: HomeRecord, period: string): boolean {
 
 function usablePayments(payments: readonly PaymentRecord[], home: HomeRecord, period: string): PaymentRecord[] {
   return payments
-    .filter((payment) => payment.period === period && payment.stage === home.stage && payment.block === home.block && payment.house === home.house)
+    .filter((payment) => mesesDelPago(payment).includes(period) && payment.stage === home.stage && payment.block === home.block && payment.house === home.house)
     .filter((payment) => payment.status !== 'DUPLICADO' && payment.status !== 'RECHAZADO')
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt));
 }
