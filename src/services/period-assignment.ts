@@ -96,6 +96,18 @@ export function assignServicePeriod(
   return periodsBetween(desde, tope).find((period) => !ocupados.has(period)) ?? tope;
 }
 
+/**
+ * Los meses que un pago tiene tomados.
+ *
+ * `pago_meses` manda (invariante 5). `period` es el respaldo para un pago que
+ * todavia no tomo ningun mes —uno esperando respuesta, por ejemplo— y para el
+ * almacen en memoria del demo, que no tiene esa tabla.
+ */
+export function mesesDelPago(pago: PaymentRecord): readonly string[] {
+  if (pago.periods && pago.periods.length > 0) return pago.periods;
+  return pago.period ? [pago.period] : [];
+}
+
 export function hasPeriodConflict(payment: PaymentRecord, existingPayments: readonly PaymentRecord[]): boolean {
   if (payment.stage == null || payment.block == null || payment.house == null) return false;
   return existingPayments.some((other) =>

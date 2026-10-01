@@ -1,4 +1,5 @@
 import { compareHomes, homeCode } from '@/src/domain/housing';
+import { mesesDelPago } from '@/src/services/period-assignment';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 
 /**
@@ -61,7 +62,9 @@ export function filasDeCobro(
   periodo: string,
   filtros: FiltrosDeCobro = {},
 ): FilaDeCobro[] {
-  const delMes = pagos.filter((pago) => pago.period === periodo && !LIBERAN.has(pago.status));
+  const delMes = pagos.filter(
+    (pago) => !LIBERAN.has(pago.status) && mesesDelPago(pago).includes(periodo),
+  );
 
   const filas = homes
     .filter((home) => home.active)

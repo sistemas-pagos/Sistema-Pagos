@@ -105,10 +105,10 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
         {detalle?.enCamino === false ? (
           <div className="cob__nota cob__nota--aviso">
             <strong>No se le va a enviar nada por WhatsApp</strong>, porque no quedó teléfono.
-            Dictale el número del recibo al vecino.
+            Dictale el número del recibo al residente.
           </div>
         ) : (
-          <div className="cob__nota">El recibo va en camino al WhatsApp del vecino.</div>
+          <div className="cob__nota">El recibo va en camino al WhatsApp del residente.</div>
         )}
 
         <div className="cob__acciones">
@@ -130,7 +130,7 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
         </header>
         <div className="cob__nota cob__nota--aviso">
           Quedó registrado para que lo revise el administrador. <strong>No se emitió recibo</strong>, así que
-          no hay número que anotar, y al vecino no se le mandó ningún mensaje.
+          no hay número que anotar, y al residente no se le mandó ningún mensaje.
         </div>
         <div className="cob__nota">Esa plata igual cuenta en lo que tenés que entregar.</div>
         <Link className="cob__boton" href="/cobros">Cobrar otra casa</Link>
@@ -160,7 +160,7 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
       {pagados.length > 0 && (
         <div className="cob__nota cob__nota--aviso">
           <strong>Ya pagó {pagados.map((mes) => periodLabel(mes.periodo)).join(', ')}.</strong>{' '}
-          Si el vecino insiste en que no le aparece, mostrale esto antes de cobrarle de nuevo.
+          Si el residente insiste en que no le aparece, mostrale esto antes de cobrarle de nuevo.
         </div>
       )}
 
@@ -192,7 +192,7 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
           </p>
 
           <div className="cob__campo" style={{ marginTop: 14 }}>
-            <label htmlFor="telefono">Teléfono del vecino · opcional</label>
+            <label htmlFor="telefono">Teléfono del residente · opcional</label>
             <input id="telefono" name="telefono" type="tel" inputMode="tel" placeholder="9999-9999" maxLength={20} />
           </div>
 
@@ -246,7 +246,7 @@ function Notas({ viviendaId, pagos }: { viviendaId: string; pagos: readonly Paym
 
       <div className="cob__campo">
         <label htmlFor="texto">Contale al administrador</label>
-        <textarea id="texto" name="texto" required maxLength={500} placeholder="Ej.: el vecino dice que su hijo ya transfirió desde otra cuenta." />
+        <textarea id="texto" name="texto" required maxLength={500} placeholder="Ej.: el residente dice que su hijo ya transfirió desde otra cuenta." />
       </div>
 
       <p className="cob__quien">

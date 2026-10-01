@@ -143,3 +143,52 @@ describe('los filtros', () => {
     expect(opcionesDeFiltro(conBaja).etapas).toEqual(['3', '4']);
   });
 });
+
+/**
+ * El cobro en efectivo, visible.
+ *
+ * `pagos.periodo` guarda un mes y `pago_meses` guarda todos. El listado
+ * filtraba por el primero, asi que un cobro de varios meses solo aparecia en
+ * el mas viejo: en los demas la casa seguia diciendo «sin pago este mes»
+ * aunque estuviera pagada, y el cobrador iba a tocarle la puerta de nuevo.
+ */
+describe('los meses que un pago tiene tomados', () => {
+  const sept = '2026-09';
+  const oct = '2026-10';
+
+  const enEfectivo = (overrides: Partial<PaymentRecord> = {}) =>
+    pago({
+      id: 'efectivo-1',
+      method: 'EFECTIVO',
+      status: 'EFECTIVO_COBRADO',
+      reference: undefined,
+      ...overrides,
+    });
+
+  it('marca pagado cada mes del cobro, no solo el primero', () => {
+    const cobro = enEfectivo({ period: sept, periods: [sept, oct], amount: 300 });
+
+    expect(filasDeCobro([casa()], [cobro], sept)[0].estado).toBe('PAGADO');
+    expect(filasDeCobro([casa()], [cobro], oct)[0].estado).toBe('PAGADO');
+  });
+
+  it('sin pago_meses cae en period, que es lo unico que tiene el demo', () => {
+    const cobro = enEfectivo({ period: oct, periods: [] });
+
+    expect(filasDeCobro([casa()], [cobro], oct)[0].estado).toBe('PAGADO');
+    expect(filasDeCobro([casa()], [cobro], sept)[0].estado).toBe('PENDIENTE');
+  });
+
+  it('un mes que el pago no tiene sigue pendiente', () => {
+    const cobro = enEfectivo({ period: sept, periods: [sept] });
+
+    expect(filasDeCobro([casa()], [cobro], oct)[0].estado).toBe('PENDIENTE');
+  });
+
+  it('un pago anulado no tapa ninguno de sus meses', () => {
+    const cobro = enEfectivo({ period: sept, periods: [sept, oct], status: 'ANULADO' });
+
+    expect(filasDeCobro([casa()], [cobro], sept)[0].estado).toBe('PENDIENTE');
+    expect(filasDeCobro([casa()], [cobro], oct)[0].estado).toBe('PENDIENTE');
+  });
+});

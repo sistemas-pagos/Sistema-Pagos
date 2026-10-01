@@ -32,7 +32,7 @@ function queSignifica(fila: ReciboNoEntregado): string {
   if (error.includes(':401') || error.includes(':403')) return 'El token de WhatsApp no tiene permiso o venció.';
   if (error.includes(':404')) return 'La plantilla no existe con ese nombre o ese idioma.';
   if (error.includes(':429')) return 'Meta limitó el envío por volumen. Se puede reintentar.';
-  return 'Revisá el número del vecino: es el motivo más común.';
+  return 'Revisá el número del residente: es el motivo más común.';
 }
 
 const horas = (desde: string, ahora: Date): number =>
@@ -54,8 +54,8 @@ export default async function RecibosPage() {
           <p className="eyebrow">Control</p>
           <h1 style={{ fontSize: 'clamp(2rem,5vw,3.6rem)' }}>Recibos no entregados</h1>
           <p className="lead">
-            Pagos verificados cuyo recibo no le llegó al vecino. La plata está bien contada;
-            lo que falta es el aviso — y el vecino no tiene cómo saber que su pago quedó registrado.
+            Pagos verificados cuyo recibo no le llegó al residente. La plata está bien contada;
+            lo que falta es el aviso — y el residente no tiene cómo saber que su pago quedó registrado.
           </p>
         </div>
         <Link className="primary-button" href="/admin">Volver al panel</Link>

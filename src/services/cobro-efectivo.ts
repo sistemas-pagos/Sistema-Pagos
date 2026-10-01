@@ -1,4 +1,4 @@
-import { BASE_PERIOD } from '@/src/services/period-assignment';
+import { BASE_PERIOD, mesesDelPago } from '@/src/services/period-assignment';
 import { periodFromDate, shiftPeriod } from '@/src/domain/periods';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 
@@ -61,10 +61,13 @@ export function mesesCobrables(
   pagosDeLaVivienda: readonly PaymentRecord[],
   hoy: Date,
 ): MesCobrable[] {
+  // Todos los meses de cada pago, no solo el que guarda `pagos.periodo`. Este
+  // conjunto es lo unico que marca un mes como ya pagado delante del cobrador:
+  // si se queda corto, la pantalla le ofrece cobrar un mes que la casa ya pago.
   const ocupados = new Set(
     pagosDeLaVivienda
-      .filter((pago) => !LIBERAN.has(pago.status) && pago.period)
-      .map((pago) => pago.period),
+      .filter((pago) => !LIBERAN.has(pago.status))
+      .flatMap((pago) => mesesDelPago(pago)),
   );
 
   return mesesDeLaVivienda(home, hoy).map((periodo) => ({
