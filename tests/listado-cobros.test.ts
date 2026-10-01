@@ -192,3 +192,34 @@ describe('los meses que un pago tiene tomados', () => {
     expect(filasDeCobro([casa()], [cobro], oct)[0].estado).toBe('PENDIENTE');
   });
 });
+
+/**
+ * El caso de Eduardo: filtrar septiembre y cobrar septiembre.
+ *
+ * El listado no miraba la fecha de alta y la pantalla de cobro si. La lista
+ * decia que la casa debia septiembre; al entrar, solo se podia cobrar octubre.
+ * Las dos pantallas tienen que decir lo mismo o el cobrador toca puertas por
+ * meses que nadie debe.
+ */
+describe('una casa no aparece antes de su alta', () => {
+  it('la que entro en octubre no esta en la lista de septiembre', () => {
+    const deOctubre = casa({ startDate: '2026-10-01' });
+
+    expect(filasDeCobro([deOctubre], [], '2026-09')).toHaveLength(0);
+    expect(filasDeCobro([deOctubre], [], '2026-10')).toHaveLength(1);
+  });
+
+  it('la que entro en septiembre si', () => {
+    expect(filasDeCobro([casa({ startDate: '2026-09-01' })], [], '2026-09')).toHaveLength(1);
+  });
+
+  /** Sin fecha de alta se asume desde el primer mes de servicio, no desde hoy. */
+  it('sin fecha de alta aparece desde septiembre', () => {
+    expect(filasDeCobro([casa({ startDate: undefined })], [], '2026-09')).toHaveLength(1);
+  });
+
+  /** Un alta anterior al sistema no adelanta nada: antes de septiembre no hay meses. */
+  it('un alta vieja no la hace aparecer antes de septiembre', () => {
+    expect(filasDeCobro([casa({ startDate: '2024-03-01' })], [], '2026-08')).toHaveLength(0);
+  });
+});

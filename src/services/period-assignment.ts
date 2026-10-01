@@ -1,14 +1,7 @@
-import { isPeriod, periodFromDate, shiftPeriod } from '@/src/domain/periods';
+import { BASE_PERIOD, isPeriod, periodFromDate, shiftPeriod } from '@/src/domain/periods';
 import type { HomeRef, PaymentRecord } from '@/src/domain/types';
 
-/**
- * Primer mes de servicio del sistema (docs/PLAN.md, seccion 1).
- *
- * La deuda anterior a septiembre de 2026 no se carga como meses: entra una sola
- * vez como `ajustes` de tipo SALDO_INICIAL. Por eso ningun pago se asigna a un
- * mes previo a este, y por eso ya no existe la regla especial de agosto.
- */
-export const BASE_PERIOD = '2026-09';
+export { BASE_PERIOD } from '@/src/domain/periods';
 
 /**
  * Invariante 5: estos estados liberan el mes. Todo lo demas lo mantiene
@@ -42,7 +35,7 @@ export function depositServicePeriod(transactionDate: string | undefined, now = 
 }
 
 /** Desde que mes se le cobra a esta vivienda. */
-function firstBillablePeriod(home: HomeForPeriod): string {
+export function firstBillablePeriod(home: HomeForPeriod): string {
   const candidate = home.startDate?.slice(0, 7);
   const alta = candidate && isPeriod(candidate) ? candidate : BASE_PERIOD;
   return alta < BASE_PERIOD ? BASE_PERIOD : alta;

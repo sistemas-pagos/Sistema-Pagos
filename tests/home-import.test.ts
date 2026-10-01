@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { nuevaBaseDePrueba } from './helpers/turso-test-db';
 import { HomeImportError, parseHomesImport } from '@/src/services/home-import';
+import { BASE_PERIOD, PRIMER_DIA_DE_SERVICIO } from '@/src/domain/periods';
 import type { HomeRecord } from '@/src/domain/types';
+import { TursoPaymentStore } from '@/src/storage/turso-store';
 
 const existing: HomeRecord[] = [
   { id: 'home-e1-b1-c1', stage: '1', block: '1', house: '1', monthlyFee: 150, active: true },
@@ -41,5 +44,46 @@ describe('bulk housing import', () => {
 
   it('rejects unknown headers instead of guessing their meaning', () => {
     expect(() => parseHomesImport('etapa,bloque,casa,telefono\n1,4,18,0000')).toThrow('Encabezado no reconocido');
+  });
+});
+
+/**
+ * El padron no se sella con la fecha en que alguien lo subio.
+ *
+ * `saveHomes` ponia `new Date()` cuando la fila no traia fecha de alta. Cargar
+ * el padron un 1 de octubre dejaba a las 600 casas debiendo desde octubre, y
+ * septiembre —el primer mes de servicio— sin cobrar a nadie. La fecha de la
+ * carga no puede decidir desde cuando debe cada casa.
+ */
+describe('una vivienda sin fecha de alta', () => {
+  it('arranca en el primer mes de servicio, no el dia de la carga', async () => {
+    const db = await nuevaBaseDePrueba();
+    const store = new TursoPaymentStore(db);
+
+    await store.saveHomes([{
+      id: 'home-e3-b32-c1', stage: '3', block: '32', house: '1',
+      monthlyFee: 150, active: true,
+    }]);
+
+    const { rows } = await db.execute("SELECT fecha_alta FROM viviendas WHERE id = 'home-e3-b32-c1'");
+    expect(String(rows[0].fecha_alta)).toBe(PRIMER_DIA_DE_SERVICIO);
+    expect(PRIMER_DIA_DE_SERVICIO.slice(0, 7)).toBe(BASE_PERIOD);
+
+    db.close();
+  });
+
+  it('respeta la fecha cuando la fila la trae', async () => {
+    const db = await nuevaBaseDePrueba();
+    const store = new TursoPaymentStore(db);
+
+    await store.saveHomes([{
+      id: 'home-e1-b1-c9', stage: '1', block: '1', house: '9',
+      monthlyFee: 150, active: true, startDate: '2027-04-01',
+    }]);
+
+    const { rows } = await db.execute("SELECT fecha_alta FROM viviendas WHERE id = 'home-e1-b1-c9'");
+    expect(String(rows[0].fecha_alta)).toBe('2027-04-01');
+
+    db.close();
   });
 });

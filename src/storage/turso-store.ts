@@ -1,5 +1,6 @@
 import type { Client, Row } from '@libsql/client';
 import { env } from '@/src/config/env';
+import { PRIMER_DIA_DE_SERVICIO } from '@/src/domain/periods';
 import type { HomeRecord, PaymentRecord, PaymentStatus, PendingConversation, ProcessedMessage } from '@/src/domain/types';
 import { type Executor, codigoVivienda, emitirRecibo, enTransaccion, registrarEvento } from '@/src/storage/turso';
 import type { CambioDePago, PaymentStore } from './types';
@@ -340,7 +341,7 @@ export class TursoPaymentStore implements PaymentStore {
           args: [
             home.id, home.stage, home.block, home.house, codigos[indice],
             home.active ? 'ACTIVA' : 'BAJA', home.responsible ?? null,
-            home.startDate ?? new Date().toISOString().slice(0, 10), home.endDate ?? null,
+            home.startDate ?? PRIMER_DIA_DE_SERVICIO, home.endDate ?? null,
           ],
         });
       }

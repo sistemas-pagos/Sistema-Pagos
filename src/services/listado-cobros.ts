@@ -1,5 +1,5 @@
 import { compareHomes, homeCode } from '@/src/domain/housing';
-import { mesesDelPago } from '@/src/services/period-assignment';
+import { firstBillablePeriod, mesesDelPago } from '@/src/services/period-assignment';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 
 /**
@@ -66,8 +66,14 @@ export function filasDeCobro(
     (pago) => !LIBERAN.has(pago.status) && mesesDelPago(pago).includes(periodo),
   );
 
+  // Una casa no aparece en un mes anterior a su alta.
+  //
+  // El listado no miraba la fecha de alta y la pantalla de cobro si, asi que se
+  // contradecian: la lista decia que la casa debia septiembre y al entrar solo
+  // se podia cobrar octubre. El cobrador le tocaba la puerta por un mes que esa
+  // casa nunca debio.
   const filas = homes
-    .filter((home) => home.active)
+    .filter((home) => home.active && periodo >= firstBillablePeriod(home))
     .map((home): FilaDeCobro => {
       const suyos = delMes.filter(
         (pago) => pago.stage === home.stage && pago.block === home.block && pago.house === home.house,

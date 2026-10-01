@@ -1,3 +1,21 @@
+/**
+ * Primer mes de servicio del sistema (docs/PLAN.md, seccion 1).
+ *
+ * La deuda anterior a septiembre de 2026 no se carga como meses: entra una sola
+ * vez como `ajustes` de tipo SALDO_INICIAL. Por eso ningun pago se asigna a un
+ * mes previo a este, y por eso ya no existe la regla especial de agosto.
+ */
+export const BASE_PERIOD = '2026-09';
+
+/**
+ * El mismo mes como fecha, para una vivienda que entra sin fecha de alta.
+ *
+ * Una casa que entra al padron sin fecha **ya estaba ahi**: el padron se carga
+ * de un vecindario que existe. Sellarla con el dia de la carga haria que la
+ * fecha en que alguien subio el archivo decidiera desde cuando debe cada casa.
+ */
+export const PRIMER_DIA_DE_SERVICIO = `${BASE_PERIOD}-01`;
+
 const HONDURAS_TIME_ZONE = 'America/Tegucigalpa';
 
 export function periodFromDate(date: Date = new Date()): string {
