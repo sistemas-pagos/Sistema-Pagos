@@ -1,6 +1,7 @@
 import type { HomeRecord, MonthlyCollectionStatus, MonthlyHomeStatusRow, PaymentRecord } from '@/src/domain/types';
 import type { PaymentStore } from '@/src/storage/types';
 import { compareHomes } from '@/src/domain/housing';
+import { mesesDelPago } from '@/src/services/period-assignment';
 
 const COUNTABLE_PAYMENT_STATUSES = new Set<PaymentRecord['status']>([
   'PENDIENTE_VERIFICACION',
@@ -19,7 +20,7 @@ export function isHomeActiveInPeriod(home: HomeRecord, period: string): boolean 
 }
 
 function assignedToHome(payment: PaymentRecord, home: HomeRecord, period: string): boolean {
-  return payment.period === period
+  return mesesDelPago(payment).includes(period)
     && payment.stage === home.stage
     && payment.block === home.block
     && payment.house === home.house;

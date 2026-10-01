@@ -83,7 +83,7 @@ export function assignServicePeriod(
       .filter((payment) => payment.id !== excludePaymentId)
       .filter((payment) => !LIBERAN_EL_MES.has(payment.status))
       .filter((payment) => sameHome(payment, home))
-      .map((payment) => payment.period),
+      .flatMap((payment) => mesesDelPago(payment)),
   );
 
   return periodsBetween(desde, tope).find((period) => !ocupados.has(period)) ?? tope;
@@ -101,6 +101,17 @@ export function mesesDelPago(pago: PaymentRecord): readonly string[] {
   return pago.period ? [pago.period] : [];
 }
 
+/**
+ * Dos pagos chocan si comparten **cualquier** mes.
+ *
+ * Comparar `period` contra `period` solo mira un mes de cada uno: dos pagos de
+ * dos meses cada uno podian solaparse en el segundo y pasar como si nada.
+ */
+export function compartenMes(uno: PaymentRecord, otro: PaymentRecord): boolean {
+  const suyos = new Set(mesesDelPago(otro));
+  return mesesDelPago(uno).some((mes) => suyos.has(mes));
+}
+
 export function hasPeriodConflict(payment: PaymentRecord, existingPayments: readonly PaymentRecord[]): boolean {
   if (payment.stage == null || payment.block == null || payment.house == null) return false;
   return existingPayments.some((other) =>
@@ -109,6 +120,6 @@ export function hasPeriodConflict(payment: PaymentRecord, existingPayments: read
     && other.stage === payment.stage
     && other.block === payment.block
     && other.house === payment.house
-    && other.period === payment.period,
+    && compartenMes(other, payment),
   );
 }

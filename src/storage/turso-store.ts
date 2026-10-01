@@ -1,6 +1,7 @@
 import type { Client, Row } from '@libsql/client';
 import { env } from '@/src/config/env';
 import { PRIMER_DIA_DE_SERVICIO } from '@/src/domain/periods';
+import { mesesDelPago } from '@/src/services/period-assignment';
 import type { HomeRecord, PaymentRecord, PaymentStatus, PendingConversation, ProcessedMessage } from '@/src/domain/types';
 import { type Executor, codigoVivienda, emitirRecibo, enTransaccion, registrarEvento } from '@/src/storage/turso';
 import type { CambioDePago, PaymentStore } from './types';
@@ -216,7 +217,7 @@ export class TursoPaymentStore implements PaymentStore {
       const previo = await tx.execute({ sql: 'SELECT estado, periodo FROM pagos WHERE id = ?', args: [pago.id] });
       if (previo.rows.length === 0) throw new Error('payment_not_found');
       const antes = String(previo.rows[0].estado);
-      await this.asegurarMesAbierto(tx, [texto(previo.rows[0].periodo), pago.period]);
+      await this.asegurarMesAbierto(tx, [texto(previo.rows[0].periodo), ...mesesDelPago(pago)]);
 
       await tx.execute({
         sql: `UPDATE pagos SET
@@ -276,7 +277,7 @@ export class TursoPaymentStore implements PaymentStore {
 
     return enTransaccion(this.db, async (tx) => {
       const previo = await tx.execute({ sql: 'SELECT periodo FROM pagos WHERE id = ?', args: [pago.id] });
-      await this.asegurarMesAbierto(tx, [texto(previo.rows[0]?.periodo), pago.period]);
+      await this.asegurarMesAbierto(tx, [texto(previo.rows[0]?.periodo), ...mesesDelPago(pago)]);
 
       const resultado = await tx.execute({
         sql: `UPDATE pagos SET

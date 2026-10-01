@@ -88,3 +88,55 @@ describe('dashboard snapshot', () => {
     expect((await buildDashboardSnapshot(store, '2026-09')).totalHomes).toBe(0);
   });
 });
+
+/**
+ * El caso de Eduardo: el listado decia 2 pagadas y el dashboard 1.
+ *
+ * `pagos.periodo` guarda un mes y `pago_meses` guarda todos. El dashboard
+ * filtraba por la columna; el listado de cobros ya miraba la tabla. Un cobro
+ * en efectivo anterior al arreglo que la escribe quedo con `periodo` vacio, asi
+ * que el dashboard no lo contaba y las dos pantallas se contradecian con la
+ * plata de una casa real de por medio.
+ */
+describe('las dos pantallas cuentan lo mismo', () => {
+  const PERIODO = '2026-09';
+
+  const casa = (house: string): HomeRecord => ({
+    id: `home-e3-b32-c${house}`, stage: '3', block: '32', house,
+    monthlyFee: 150, active: true, startDate: '2026-09-01',
+  });
+
+  const cobro = (id: string, house: string, overrides: Partial<PaymentRecord> = {}): PaymentRecord => ({
+    id, createdAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z',
+    sourceMessageId: '', phone: '', bank: '', amount: 150, transactionDate: '2026-10-01',
+    stage: '3', block: '32', house, period: PERIODO, status: 'EFECTIVO_COBRADO',
+    method: 'EFECTIVO', fileHash: '', ...overrides,
+  });
+
+  it('cuenta un cobro cuyos meses solo estan en pago_meses', async () => {
+    const store = new MemoryPaymentStore({
+      homes: [casa('1'), casa('2')],
+      // El viejo: sin `periodo`, solo con sus meses reservados.
+      payments: [
+        cobro('p-viejo', '1', { period: '', periods: [PERIODO] }),
+        cobro('p-nuevo', '2'),
+      ],
+    });
+
+    const snapshot = await buildDashboardSnapshot(store, PERIODO);
+
+    expect(snapshot.paidHomes).toBe(2);
+    expect(snapshot.pendingHomes).toBe(0);
+    expect(snapshot.receivedAmount).toBe(300);
+  });
+
+  it('cuenta los dos meses de un cobro que cubre varios', async () => {
+    const store = new MemoryPaymentStore({
+      homes: [casa('1')],
+      payments: [cobro('p-dos-meses', '1', { period: PERIODO, periods: [PERIODO, '2026-10'], amount: 300 })],
+    });
+
+    expect((await buildDashboardSnapshot(store, PERIODO)).paidHomes).toBe(1);
+    expect((await buildDashboardSnapshot(store, '2026-10')).paidHomes).toBe(1);
+  });
+});

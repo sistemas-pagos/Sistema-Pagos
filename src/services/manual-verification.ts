@@ -1,3 +1,4 @@
+import { compartenMes } from '@/src/services/period-assignment';
 import { env } from '@/src/config/env';
 import type { PaymentRecord } from '@/src/domain/types';
 import { hasPeriodConflict } from '@/src/services/period-assignment';
@@ -25,7 +26,7 @@ export function hasVerifiedServicePeriodConflict(
     && other.stage === payment.stage
     && other.block === payment.block
     && other.house === payment.house
-    && other.period === payment.period,
+    && compartenMes(other, payment),
   );
 }
 
