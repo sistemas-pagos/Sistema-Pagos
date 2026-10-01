@@ -2,8 +2,9 @@ import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTOR, nuevaBaseDePrueba } from './helpers/turso-test-db';
 import { resetEnvForTests } from '@/src/config/env';
-import { hashDeClave, verificarClave } from '@/src/auth/claves';
+import { hashDeClave, verificarClave, LARGO_MINIMO_CLAVE } from '@/src/auth/claves';
 import { credencialValida, claveCompartidaValida } from '@/src/auth/credenciales';
+import { BLOQUEO_MINUTOS, MAX_INTENTOS } from '@/src/auth/intentos';
 import { crearUsuario, credencialPorLogin, fijarCredenciales, normalizarLogin } from '@/src/storage/usuarios';
 
 /**
@@ -168,5 +169,43 @@ describe('el respaldo de la clave compartida', () => {
 
     expect(claveCompartidaValida('una-clave-compartida-de-transicion')).toBeUndefined();
     expect(claveCompartidaValida('')).toBeUndefined();
+  });
+});
+
+/**
+ * El piso del largo de la clave.
+ *
+ * No es una preferencia de estilo: es lo unico que separa la clave de caer por
+ * fuerza bruta, dado que el bloqueo deja pasar ~480 intentos por dia.
+ */
+describe('el largo minimo de la clave', () => {
+  const INTENTOS_POR_DIA = (60 / BLOQUEO_MINUTOS) * MAX_INTENTOS * 24;
+
+  it('deja pasar menos de 500 intentos por dia', () => {
+    // Cinco intentos cada quince minutos. Es el techo contra el que se mide
+    // cualquier largo que se elija.
+    expect(INTENTOS_POR_DIA).toBeLessThan(500);
+  });
+
+  /**
+   * La cuenta que fija el piso: un PIN de cuatro digitos son 10.000
+   * combinaciones y a ese ritmo cae en tres semanas, bloqueo incluido. Por eso
+   * el minimo no puede bajar de ocho por comodidad.
+   */
+  it('un PIN de cuatro digitos caeria en semanas, y por eso hay piso', () => {
+    const diasEnCaer = 10_000 / INTENTOS_POR_DIA;
+
+    expect(diasEnCaer).toBeLessThan(30);
+    expect(LARGO_MINIMO_CLAVE).toBeGreaterThanOrEqual(8);
+  });
+
+  /** El caso borde: una clave de exactamente el minimo tiene que funcionar. */
+  it('una clave del largo minimo exacto se guarda y verifica', async () => {
+    const clave = 'Tr3n-As3o';
+    expect(clave).toHaveLength(LARGO_MINIMO_CLAVE + 1);
+
+    const hash = await hashDeClave(clave.slice(0, LARGO_MINIMO_CLAVE));
+    expect(await verificarClave(clave.slice(0, LARGO_MINIMO_CLAVE), hash)).toBe(true);
+    expect(await verificarClave(clave.slice(0, LARGO_MINIMO_CLAVE - 1), hash)).toBe(false);
   });
 });
