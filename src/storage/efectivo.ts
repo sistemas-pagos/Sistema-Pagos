@@ -200,3 +200,52 @@ export async function cobradoSinEntregar(
 
   return { totalCentavos, cobros, enRevisionCentavos };
 }
+
+export interface DetalleDeRecibo {
+  numero: number;
+  vivienda: string;
+  periodos: string[];
+  montoCentavos: number;
+  fechaPago: string;
+  /**
+   * Si hay un envio encolado para este recibo. **No** es lo mismo que haber
+   * cobrado: sin telefono o sin consentimiento el pago vale igual pero no sale
+   * ningun mensaje (invariante 13), y decirle al vecino que ya le llega seria
+   * mentirle en la cara del cobrador.
+   */
+  enCamino: boolean;
+}
+
+/**
+ * Lo que la pantalla le muestra al cobrador despues de cobrar.
+ *
+ * Se lee de la base en vez de arrastrarlo por la URL: el monto y los meses de
+ * una casa no son algo que deba viajar en la barra de direcciones, donde queda
+ * en el historial del telefono y en cualquier captura (invariante 12).
+ */
+export async function detalleDeRecibo(db: Client, numero: number): Promise<DetalleDeRecibo | undefined> {
+  const { rows } = await db.execute({
+    sql: `SELECT r.numero, p.monto_centavos, p.fecha_pago, v.codigo,
+                 (SELECT count(*) FROM envios e WHERE e.recibo_numero = r.numero) AS envios,
+                 (SELECT group_concat(pm.periodo, ',')
+                    FROM pago_meses pm
+                   WHERE pm.pago_id = p.id AND pm.estado IN ('RESERVADO', 'PAGADO')) AS periodos
+            FROM recibos r
+            JOIN pagos p ON p.id = r.pago_id
+            LEFT JOIN viviendas v ON v.id = p.vivienda_id
+           WHERE r.numero = ? AND r.estado = 'EMITIDO'`,
+    args: [numero],
+  });
+
+  const fila = rows[0];
+  if (!fila) return undefined;
+
+  return {
+    numero: Number(fila.numero),
+    vivienda: fila.codigo == null ? '—' : String(fila.codigo),
+    periodos: fila.periodos == null ? [] : String(fila.periodos).split(',').sort(),
+    montoCentavos: Number(fila.monto_centavos),
+    fechaPago: fila.fecha_pago == null ? '' : String(fila.fecha_pago),
+    enCamino: Number(fila.envios) > 0,
+  };
+}

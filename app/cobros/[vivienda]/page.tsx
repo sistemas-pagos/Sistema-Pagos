@@ -6,6 +6,10 @@ import { periodLabel } from '@/src/domain/periods';
 import { homeCode } from '@/src/domain/housing';
 import { formatoRecibo } from '@/src/domain/recibo';
 import { mesesCobrables } from '@/src/services/cobro-efectivo';
+import { detalleDeRecibo } from '@/src/storage/efectivo';
+import { getTursoClient } from '@/src/storage/turso-client';
+import { isDemoMode } from '@/src/config/env';
+import { listaDeMeses } from '@/src/domain/recibo';
 import type { PaymentRecord } from '@/src/domain/types';
 import { getPaymentStore } from '@/src/storage';
 
@@ -62,6 +66,9 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
   // Se emitio el recibo: lo unico que importa en pantalla es el numero, porque
   // el cobrador lo anota en su talonario delante del vecino.
   if (query.recibo) {
+    const numero = Number(query.recibo);
+    const detalle = isDemoMode() ? undefined : await detalleDeRecibo(await getTursoClient(), numero);
+
     return (
       <main className="cob">
         <header className="cob__head">
@@ -70,12 +77,43 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
             <h1 className="cob__title">{homeCode(home)}</h1>
           </div>
         </header>
+
         <div className="cob__recibo">
           <p className="cob__quien" style={{ margin: 0 }}>Anotá este número en tu recibo</p>
-          <b>{formatoRecibo(Number(query.recibo))}</b>
+          <b>{formatoRecibo(numero)}</b>
         </div>
-        <div className="cob__nota">El recibo va en camino al WhatsApp del vecino.</div>
-        <Link className="cob__boton" href="/cobros">Cobrar otra casa</Link>
+
+        {/*
+          Lo mismo que dice el recibo del vecino, para que el cobrador pueda
+          leerlo en voz alta y los dos miren el mismo dato.
+        */}
+        {detalle && (
+          <dl className="cob__detalle">
+            <dt>Vivienda</dt><dd>{detalle.vivienda}</dd>
+            <dt>{detalle.periodos.length === 1 ? 'Mes' : 'Meses'}</dt>
+            <dd>{listaDeMeses(detalle.periodos)}</dd>
+            <dt>Monto</dt><dd>{money(detalle.montoCentavos)}</dd>
+            <dt>Fecha</dt><dd>{detalle.fechaPago || '—'}</dd>
+          </dl>
+        )}
+
+        {/*
+          Sin telefono o sin consentimiento no se encolo ningun envio. Decir
+          que va en camino seria hacerle prometer al cobrador algo que no va a
+          pasar, delante del vecino.
+        */}
+        {detalle?.enCamino === false ? (
+          <div className="cob__nota cob__nota--aviso">
+            <strong>No se le va a enviar nada por WhatsApp</strong>, porque no quedó teléfono.
+            Dictale el número del recibo al vecino.
+          </div>
+        ) : (
+          <div className="cob__nota">El recibo va en camino al WhatsApp del vecino.</div>
+        )}
+
+        <div className="cob__acciones">
+          <Link className="cob__boton" href="/cobros">Cobrar otra casa</Link>
+        </div>
       </main>
     );
   }

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTOR, CUOTA_CENTAVOS, PLANTILLA, contar, nuevaBaseDePrueba } from './helpers/turso-test-db';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 import { CobroInvalido, mesesCobrables, mesesDeLaVivienda, seleccionarMeses } from '@/src/services/cobro-efectivo';
-import { cobradoSinEntregar, registrarCobroEnEfectivo, registrarCobroEnRevision } from '@/src/storage/efectivo';
+import {
+  cobradoSinEntregar, detalleDeRecibo, registrarCobroEnEfectivo, registrarCobroEnRevision,
+} from '@/src/storage/efectivo';
 import { crearVivienda } from '@/src/storage/turso';
 import { crearUsuario } from '@/src/storage/usuarios';
 
@@ -255,5 +257,65 @@ describe('lo que el cobrador tiene que entregar', () => {
     expect(await cobradoSinEntregar(db, 'u-cobrador')).toEqual({
       totalCentavos: 0, cobros: 0, enRevisionCentavos: 0,
     });
+  });
+});
+
+/**
+ * Lo que ve el cobrador despues de cobrar.
+ *
+ * La pantalla decia «el recibo va en camino al WhatsApp del vecino» siempre,
+ * incluso cuando no se encolo ningun envio por no haber telefono. El cobrador
+ * le prometia al vecino, en su cara, algo que no iba a pasar.
+ */
+describe('el detalle del recibo', () => {
+  const base = {
+    viviendaId: 'v1', cobradorId: 'u-cobrador',
+    fechaPago: '2026-10-15', plantilla: PLANTILLA, creadoEn: EN,
+  };
+
+  async function cobrar(meses: { periodo: string; montoCentavos: number }[], conTelefono: boolean) {
+    return registrarCobroEnEfectivo(db, {
+      ...base,
+      pagoId: 'p-recibo',
+      meses,
+      telefono: conTelefono ? '+50433330000' : undefined,
+      aceptaWhatsapp: conTelefono,
+    }, ACTOR);
+  }
+
+  it('trae lo mismo que dice el recibo del vecino', async () => {
+    const { reciboNumero } = await cobrar([{ periodo: '2026-09', montoCentavos: CUOTA_CENTAVOS }], true);
+
+    expect(await detalleDeRecibo(db, reciboNumero)).toMatchObject({
+      numero: reciboNumero,
+      vivienda: 'E3B2C14',
+      periodos: ['2026-09'],
+      montoCentavos: CUOTA_CENTAVOS,
+      enCamino: true,
+    });
+  });
+
+  /** Dos meses salen ordenados, que es como se leen en voz alta. */
+  it('con varios meses los trae todos y en orden', async () => {
+    const { reciboNumero } = await cobrar([
+      { periodo: '2026-10', montoCentavos: CUOTA_CENTAVOS },
+      { periodo: '2026-09', montoCentavos: CUOTA_CENTAVOS },
+    ], true);
+
+    const detalle = await detalleDeRecibo(db, reciboNumero);
+
+    expect(detalle?.periodos).toEqual(['2026-09', '2026-10']);
+    expect(detalle?.montoCentavos).toBe(CUOTA_CENTAVOS * 2);
+  });
+
+  /** El caso que obligo a este cambio. */
+  it('sin telefono avisa que no va en camino', async () => {
+    const { reciboNumero } = await cobrar([{ periodo: '2026-09', montoCentavos: CUOTA_CENTAVOS }], false);
+
+    expect((await detalleDeRecibo(db, reciboNumero))?.enCamino).toBe(false);
+  });
+
+  it('un numero que no existe no devuelve nada', async () => {
+    expect(await detalleDeRecibo(db, 99_999)).toBeUndefined();
   });
 });
