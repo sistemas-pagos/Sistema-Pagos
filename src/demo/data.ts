@@ -15,6 +15,8 @@ export const DEMO_HOMES: HomeRecord[] = [
   { id: 'home-e1-b4-c18', stage: '1', block: '4', house: '18', responsible: 'Persona Demo J', monthlyFee: 150, active: true },
   { id: 'home-e1-b4-c19', stage: '1', block: '4', house: '19', responsible: 'Persona Demo K', monthlyFee: 150, active: true },
   { id: 'home-e1-b4-c20', stage: '1', block: '4', house: '20', responsible: 'Persona Demo L', monthlyFee: 150, active: true },
+  // Una casa inactiva: no paga el servicio, pero existe y se cuenta.
+  { id: 'home-e1-b3-c9', stage: '1', block: '3', house: '9', responsible: 'Persona Demo M', monthlyFee: 150, active: false },
 ];
 
 const base = {

@@ -54,7 +54,7 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
   const store = await getPaymentStore();
   const [homes, pagos] = await Promise.all([store.listHomes(), store.listPayments()]);
   const home = homes.find((candidata) => candidata.id === viviendaId);
-  if (!home || !home.active) notFound();
+  if (!home) notFound();
 
   const suyos = pagos.filter(
     (pago) => pago.stage === home.stage && pago.block === home.block && pago.house === home.house,
@@ -157,14 +157,22 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
         </div>
       )}
 
-      {pagados.length > 0 && (
+      {!home.active && (
+        <div className="cob__nota cob__nota--aviso">
+          <strong>Esta casa está marcada como inactiva</strong>, así que no paga el servicio y no
+          se le puede cobrar desde acá. Si tiene que pagar, un administrador la pone activa en el
+          panel y volvés a entrar.
+        </div>
+      )}
+
+      {home.active && pagados.length > 0 && (
         <div className="cob__nota cob__nota--aviso">
           <strong>Ya pagó {pagados.map((mes) => periodLabel(mes.periodo)).join(', ')}.</strong>{' '}
           Si el residente insiste en que no le aparece, mostrale esto antes de cobrarle de nuevo.
         </div>
       )}
 
-      {debe.length === 0 ? (
+      {!home.active ? null : debe.length === 0 ? (
         <>
           <div className="cob__nota">Esta casa está al día. No hay nada que cobrar.</div>
           <RegistroEnRevision viviendaId={home.id} />

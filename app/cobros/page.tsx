@@ -45,11 +45,19 @@ const filtro = (valor: string | undefined): string | undefined => {
 const esEstado = (valor: string | undefined): EstadoDeCasa | undefined =>
   valor && valor in ETIQUETA ? (valor as EstadoDeCasa) : undefined;
 
+/** `activa` y `inactiva` son los dos unicos estados de una casa. */
+const esActiva = (valor: string | undefined): boolean | undefined => {
+  if (valor === 'activa') return true;
+  if (valor === 'inactiva') return false;
+  return undefined;
+};
+
 interface Params {
   etapa?: string;
   bloque?: string;
   casa?: string;
   estado?: string;
+  casa_estado?: string;
   metodo?: string;
   q?: string;
   mes?: string;
@@ -70,10 +78,12 @@ export default async function CobrosPage({ searchParams }: { searchParams: Promi
     block: filtro(params.bloque),
     house: filtro(params.casa),
     estado: esEstado(params.estado),
+    activa: esActiva(params.casa_estado),
     metodo: params.metodo === 'EFECTIVO' || params.metodo === 'TRANSFERENCIA' ? params.metodo : undefined,
     busqueda: params.q,
   });
 
+  const inactivas = filas.filter((fila) => !fila.activa).length;
   const vuelveAlPanel = sesion !== undefined && ROLES_DEL_PANEL.includes(sesion.rol);
   const opciones = opcionesDeFiltro(homes);
   const porEntregar = isDemoMode() || !sesion
@@ -160,6 +170,14 @@ export default async function CobrosPage({ searchParams }: { searchParams: Promi
             </select>
           </div>
           <div className="cob__campo">
+            <label htmlFor="casa_estado">Activa</label>
+            <select id="casa_estado" name="casa_estado" defaultValue={params.casa_estado ?? ''}>
+              <option value="">Todas</option>
+              <option value="activa">Solo activas</option>
+              <option value="inactiva">Solo inactivas</option>
+            </select>
+          </div>
+          <div className="cob__campo">
             <label htmlFor="metodo">Método</label>
             <select id="metodo" name="metodo" defaultValue={params.metodo ?? ''}>
               <option value="">Todos</option>
@@ -188,7 +206,10 @@ export default async function CobrosPage({ searchParams }: { searchParams: Promi
       </form>
 
       <p className="cob__conteo">
-        {filas.length === 0 ? 'Ninguna vivienda con esos filtros.' : `${filas.length} ${filas.length === 1 ? 'vivienda' : 'viviendas'}`}
+        {filas.length === 0
+          ? 'Ninguna vivienda con esos filtros.'
+          : `${filas.length} ${filas.length === 1 ? 'vivienda' : 'viviendas'}`}
+        {inactivas > 0 && ` · ${inactivas} ${inactivas === 1 ? 'inactiva' : 'inactivas'}`}
       </p>
 
       <ul className="cob__lista">
@@ -205,12 +226,25 @@ function Casa({ fila, periodo }: { fila: FilaDeCobro; periodo: string }) {
         <span className="cob__datos">
           <span className="cob__codigo">{fila.codigo}</span>
           <span className="cob__meta">
-            {fila.estado === 'PENDIENTE'
-              ? 'Sin pago este mes'
-              : `${fila.metodo === 'EFECTIVO' ? 'Efectivo' : 'Transferencia'}${fila.fechaPago ? ` · ${fila.fechaPago}` : ''}`}
+            {!fila.activa && fila.estado === 'PENDIENTE'
+              ? 'No paga el servicio'
+              : fila.estado === 'PENDIENTE'
+                ? 'Sin pago este mes'
+                : `${fila.metodo === 'EFECTIVO' ? 'Efectivo' : 'Transferencia'}${fila.fechaPago ? ` · ${fila.fechaPago}` : ''}`}
           </span>
         </span>
-        <span className={`cob__chip ${CLASE[fila.estado]}`}>{ETIQUETA[fila.estado]}</span>
+        <span className="cob__estados">
+          {!fila.activa && <span className="cob__chip cob__chip--inactiva">Inactiva</span>}
+          {/*
+            «Pendiente» quiere decir que debe. Una casa inactiva no debe, asi
+            que los dos chips juntos mandarian al cobrador a tocar una puerta
+            por nada. Si la inactiva igual pago, eso si se muestra: es un dato
+            que alguien va a tener que mirar.
+          */}
+          {(fila.activa || fila.estado !== 'PENDIENTE') && (
+            <span className={`cob__chip ${CLASE[fila.estado]}`}>{ETIQUETA[fila.estado]}</span>
+          )}
+        </span>
       </Link>
     </li>
   );

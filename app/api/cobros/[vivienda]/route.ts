@@ -27,6 +27,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ viv
   const store = await getPaymentStore();
   const [homes, pagos] = await Promise.all([store.listHomes(), store.listPayments()]);
   const home = homes.find((candidata) => candidata.id === viviendaId);
+  // Una casa inactiva no paga el servicio, asi que no se le cobra. La pantalla
+  // ya no ofrece el formulario, pero esto no sobra: el POST viaja por HTTP y
+  // puede llegar de una pestaña vieja o de una casa que se desactivo mientras
+  // el cobrador la tenia abierta.
   if (!home || !home.active) return new NextResponse('Not found', { status: 404 });
 
   const form = await request.formData();
