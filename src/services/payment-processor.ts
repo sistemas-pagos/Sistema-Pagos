@@ -136,9 +136,25 @@ function viviendaNoEntendidaReply(intento: number): string {
 function viviendaDesconocidaReply(intento: number): string {
   const restantes = MAX_INTENTOS_VIVIENDA - intento;
   return [
-    'Esa vivienda no aparece en el padrón.',
-    'Revisá la etapa, el bloque y la casa.',
+    'No encontramos esa vivienda.',
+    'Puede que la etapa, el bloque o la casa estén escritos distinto. Verificá los tres y volvé a enviarlos.',
     restantes === 1 ? 'Si no sale esta vez, lo revisa una persona.' : 'Por ejemplo: E1 B4 C18',
+  ].join('\n');
+}
+
+/**
+ * El comprobante **si** traia la vivienda, pero esa vivienda no existe.
+ *
+ * Antes caia en `unidentifiedReply`, que dice «falta saber de que vivienda es»
+ * como si el residente no la hubiera escrito. La escribio: lo que pasa es que
+ * no aparece. Decirle que falta un dato que si mando lo manda a buscar el
+ * error donde no esta.
+ */
+function viviendaDelComprobanteNoExisteReply(payment: PaymentRecord): string {
+  return [
+    `Recibimos tu comprobante por ${amountLabel(payment.amount)}, pero no encontramos esa vivienda.`,
+    'Puede que la etapa, el bloque o la casa estén escritos distinto. Verificá los tres.',
+    'Respondé con la vivienda correcta. Por ejemplo: E1 B4 C18',
   ].join('\n');
 }
 
@@ -380,7 +396,12 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
 
     await markMessage(store, input.messageId, kind, 'processed', at);
 
-    if (shouldAskHome) return { action: 'reply', reply: unidentifiedReply(record), paymentId: record.id, status: record.status, reason: reviewReason };
+    if (shouldAskHome) {
+      const reply = homeResolution.warning === 'receipt_home_not_in_master'
+        ? viviendaDelComprobanteNoExisteReply(record)
+        : unidentifiedReply(record);
+      return { action: 'reply', reply, paymentId: record.id, status: record.status, reason: reviewReason };
+    }
     if (pendingConflict || record.status === 'EN_REVISION') return { action: 'reply', reply: reviewReply(), paymentId: record.id, status: record.status, reason: record.reviewReason };
     return { action: 'reply', reply: receiptAcceptedReply(record), paymentId: record.id, status: record.status };
   }

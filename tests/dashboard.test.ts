@@ -186,3 +186,65 @@ describe('viviendas inactivas en el dashboard', () => {
     expect((await buildDashboardSnapshot(store, PERIODO)).inactiveHomes).toBe(0);
   });
 });
+
+/**
+ * La plata de una casa inactiva no suma **mientras** lo este.
+ *
+ * Eduardo: «no deberia de sumar si esta inactivo, pero una vez hace el deposito
+ * o entrega en efectivo y el admin lo deje como activo si suma, por que esta
+ * activo, y de ahi en adelante esa cuenta ya queda activa».
+ *
+ * O sea: la plata no desaparece, espera. Lo que no puede hacer es engordar el
+ * recaudado de un mes en el que esa casa no estaba cobrando. La prueba que
+ * importa es la segunda: activar la casa tiene que hacer aparecer su pago sin
+ * tocar el pago.
+ */
+describe('la plata de una casa inactiva', () => {
+  const PERIODO = '2026-09';
+
+  const vivienda = (house: string, active: boolean): HomeRecord => ({
+    id: `home-e1-b1-c${house}`, stage: '1', block: '1', house,
+    monthlyFee: 150, active, startDate: '2026-09-01',
+  });
+
+  const suPago = (house: string): PaymentRecord => ({
+    id: `pago-${house}`, createdAt: '2026-09-10T10:00:00.000Z', updatedAt: '2026-09-10T10:00:00.000Z',
+    sourceMessageId: '', phone: '', bank: 'BAC Honduras', amount: 150, transactionDate: '2026-09-10',
+    stage: '1', block: '1', house, period: PERIODO, status: 'EN_REVISION',
+    reviewReason: 'home_inactive', fileHash: '',
+  });
+
+  it('no suma en recibido mientras la casa esta inactiva', async () => {
+    const store = new MemoryPaymentStore({
+      homes: [vivienda('1', true), vivienda('2', false)],
+      payments: [suPago('2')],
+    });
+
+    const snapshot = await buildDashboardSnapshot(store, PERIODO);
+
+    expect(snapshot.receivedAmount).toBe(0);
+    expect(snapshot.inactiveHomes).toBe(1);
+  });
+
+  /** El mismo pago, la misma casa: lo unico que cambia es que el admin la activo. */
+  it('suma en cuanto el admin la deja activa, sin tocar el pago', async () => {
+    const antes = new MemoryPaymentStore({ homes: [vivienda('2', false)], payments: [suPago('2')] });
+    const despues = new MemoryPaymentStore({ homes: [vivienda('2', true)], payments: [suPago('2')] });
+
+    expect((await buildDashboardSnapshot(antes, PERIODO)).receivedAmount).toBe(0);
+    expect((await buildDashboardSnapshot(despues, PERIODO)).receivedAmount).toBe(150);
+  });
+
+  /**
+   * Una vivienda que no esta en el padron es otro problema, y su plata si se ve:
+   * esconderla dejaria dinero existiendo que nadie cuadra.
+   */
+  it('la de una vivienda que no existe en el padron si suma', async () => {
+    const store = new MemoryPaymentStore({
+      homes: [vivienda('1', true)],
+      payments: [{ ...suPago('99'), reviewReason: 'receipt_home_not_in_master' }],
+    });
+
+    expect((await buildDashboardSnapshot(store, PERIODO)).receivedAmount).toBe(150);
+  });
+});

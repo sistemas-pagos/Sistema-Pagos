@@ -227,3 +227,43 @@ describe('un pago de una casa inactiva', () => {
     expect(pago.reviewReason).toBe('home_inactive');
   });
 });
+
+/**
+ * Cuando la vivienda del comprobante no existe, se dice eso y no otra cosa.
+ *
+ * El comprobante traia la vivienda escrita, pero no esta en el padron. El
+ * sistema respondia «falta saber de que vivienda es», que es el mensaje de
+ * cuando el residente **no** la escribio. Mandarlo a agregar un dato que ya
+ * mando lo hace buscar el error donde no esta: lo que tiene que revisar es si
+ * la etapa, el bloque o la casa estan escritos distinto.
+ */
+describe('el mensaje cuando no se encuentra la vivienda', () => {
+  const otras: HomeRecord[] = [
+    { id: 'home-e9-b9-c9', stage: '9', block: '9', house: '9', monthlyFee: 150, active: true },
+  ];
+
+  it('dice que no se encontro y que verifique los tres datos', async () => {
+    const store = new MemoryPaymentStore({ homes: otras }, now);
+
+    const result = await processReceiptMessage({
+      messageId: 'msg-sin-padron', phone: '+50400000999', bytes: png(31),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
+    }, { store, now });
+
+    expect(result.reply).toContain('no encontramos esa vivienda');
+    expect(result.reply).toContain('Verificá');
+    expect(result.reply).not.toContain('falta saber de qué vivienda es');
+  });
+
+  /** Si de verdad no la escribio, el mensaje sigue siendo el otro. */
+  it('si el comprobante no trae vivienda, pide la vivienda', async () => {
+    const store = new MemoryPaymentStore({ homes: otras }, now);
+
+    const result = await processReceiptMessage({
+      messageId: 'msg-sin-vivienda', phone: '+50400000998', bytes: png(32),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.missingHome,
+    }, { store, now });
+
+    expect(result.reply).toContain('falta saber de qué vivienda es');
+  });
+});

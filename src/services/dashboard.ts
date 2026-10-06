@@ -35,7 +35,25 @@ export async function buildDashboardSnapshot(store: PaymentStore, period: string
   const homesByKey = new Map(homes.map((home) => [homeKey(home), home]));
   const allPayments = storedPayments.filter((payment) => mesesDelPago(payment).includes(period));
   const monthlyStatus = deriveMonthlyHomeStatus(homes, allPayments, period);
-  const received = accountingPayments(allPayments).filter(isReceived);
+
+  // Mientras la casa esta inactiva, su plata no suma en ningun total.
+  //
+  // No es que ese pago no exista: esta en la bandeja de revision, con nombre y
+  // monto, esperando que el admin decida. Lo que no puede hacer es engordar el
+  // recaudado de un mes en el que esa casa no estaba cobrando. En cuanto el
+  // admin la activa, la casa entra en `homes` y su pago empieza a sumar solo,
+  // sin tocar nada aca: de ahi en adelante es una casa activa como cualquiera.
+  //
+  // Se mira el padron, no `activeHomeKeys`: una vivienda que **no esta** en el
+  // padron es otro problema —y su plata si tiene que verse.
+  const inactiveHomeKeys = new Set(
+    allHomes.filter((home) => !isHomeActiveInPeriod(home, period)).map(homeKey),
+  );
+  const deCasaInactiva = (payment: PaymentRecord): boolean =>
+    payment.stage != null && payment.block != null && payment.house != null
+    && inactiveHomeKeys.has(homeKey({ stage: payment.stage, block: payment.block, house: payment.house }));
+
+  const received = accountingPayments(allPayments).filter(isReceived).filter((pago) => !deCasaInactiva(pago));
   const assigned = received.filter((payment) => payment.stage != null && payment.block != null && payment.house != null);
   const assignedToActiveHomes = assigned.filter((payment) => activeHomeKeys.has(homeKey({ stage: payment.stage!, block: payment.block!, house: payment.house! })));
   const verifiedAssigned = assignedToActiveHomes.filter((payment) => payment.status === 'VERIFICADO' || payment.status === 'EFECTIVO_COBRADO');
