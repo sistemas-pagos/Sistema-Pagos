@@ -47,10 +47,11 @@ banking data, credentials, service-account files or secrets.
 ## Data and security
 
 - Turso is the single source of truth (`docs/PLAN.md` section 1). **No Google service is wired
-  up:** the Sheets storage module is gone, no code imports `googleapis`, and the environment
-  contract declares no `GOOGLE_*` variable. Section 1 of the plan still wants Sheets as a
-  read-only destination for dashboards, but nothing has been built for it — do not describe it as
-  if it existed, and do not add a Google dependency or credential without asking first.
+  up, and none is coming:** the Sheets storage module and its schema are gone, no code imports
+  `googleapis`, and the environment contract declares no `GOOGLE_*` variable. Sheets was ruled
+  out for good on 2026-10-06 — the five read-only views it was meant to serve live in the panel.
+  Never describe a Google integration as if it existed, and never add a Google dependency or
+  credential unless Eduardo asks for it again.
 - Receipt images are not retained, so no object storage (Drive, S3, Blob) is required or allowed.
 - WhatsApp webhook signature validation and file type/size/magic-byte validation must remain fail-closed.
 - Never put Meta/BAC credentials in Git, docs, fixtures, logs, screenshots, or public demo output.

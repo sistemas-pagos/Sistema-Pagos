@@ -7,9 +7,12 @@ Este documento reemplaza las decisiones anteriores cuando haya conflicto. Implem
 - Métodos de pago: **transferencia** (cuenta bancaria exclusiva) y **efectivo**. Sin pagos adelantados.
 - Identidad de vivienda: **Etapa + Bloque + Casa** (texto; admite letras). Código compacto `E1B4C18`.
 - **Turso** es la única fuente de verdad (base nueva, sin relación con otros proyectos).
-- **Google Sheets** es solo lectura (dashboard, pendientes, excepciones, cierres). No se
-  construyó: esas cinco vistas quedaron en el panel y hoy nada del sistema habla con Google.
-  Si todavía hace falta es una pregunta abierta de la sección 7.
+- **Sin Google Sheets, y sin ningún servicio de Google.** El plan original la pedía como
+  destino de solo lectura para el dashboard, los pendientes, las excepciones y los cierres.
+  Esas cinco vistas se construyeron en el panel, así que Sheets ya no aportaba nada y traía de
+  vuelta una cuenta de servicio con sus credenciales. Eduardo la descartó en todo punto el 6
+  de octubre de 2026. No se agrega una dependencia ni una credencial de Google sin que él lo
+  pida de nuevo.
 - **El cobro en efectivo se registra en el panel**, desde el teléfono del cobrador. Antes decía Google Form; se cambió porque registrarlo en el panel elimina la cuenta de servicio de Google, el workflow `procesar-efectivo` y la sincronización de una hoja de respuestas, para el mismo resultado.
 - **GitHub Actions** hace el trabajo pesado. **Vercel** solo aloja el webhook mínimo y el panel.
 - **Sin Apps Script.**
@@ -267,9 +270,9 @@ nada que el existente no hiciera ya:
 - **`conciliar-csv` no existe como workflow aparte.** El CSV entra como un mensaje de WhatsApp
   y lo atiende `procesar-comprobantes`, que ya lee esa cola.
 
-**`sincronizar-sheets` sigue sin construirse**, y con él toda la sección de Sheets. El panel
-muestra hoy el dashboard, los pendientes, las excepciones, los recibos no entregados y los
-cierres, así que la pregunta de si Sheets todavía hace falta está en la sección 7.
+**`sincronizar-sheets` no existe y no se va a construir.** El panel muestra hoy el dashboard,
+los pendientes, las excepciones, los recibos no entregados y los cierres, que era todo lo que
+Sheets iba a servir (sección 1).
 
 El cron de Actions es *best-effort*: lo medimos y los huecos reales son de ~2 horas, no los
 10–15 minutos que declara. Por eso lo que tiene que responder rápido no depende del cron —
@@ -281,7 +284,7 @@ Reglas para todos: `permissions: contents: read` salvo lo necesario, `concurrenc
 ## 6. Fases y criterios de aceptación
 
 **Dónde estamos.** Las fases 0 a 6 están construidas y mergeadas, con la base de producción
-migrada hasta la `008`. La 7 está a medias: el panel y el cierre de mes existen, Sheets no.
+migrada hasta la `008`. De la 7 falta un solo punto, y es de orden interno.
 
 | Fase | Estado |
 |---|---|
@@ -292,7 +295,7 @@ migrada hasta la `008`. La 7 está a medias: el panel y el cierre de mes existen
 | 4 — Recibos | ✅ |
 | 5 — Conciliación por CSV | ✅ (dentro de `procesar-comprobantes`) |
 | 6 — Efectivo | ✅ |
-| 7 — Sheets, panel y cierre de mes | ◐ a medias, ver abajo |
+| 7 — Panel y cierre de mes | ◐ falta `status-machine`, ver abajo |
 
 Lo que falta **no es código**: el padrón cargado, las credenciales del cobrador y el método
 de pago en Meta. Sin padrón no se puede cobrar nada, porque un pago necesita una casa a la
@@ -351,7 +354,7 @@ cual asignarse.
 - Cierre de caja → `VERIFICADO` (sin nuevo recibo).
 - Aceptación: un cobro a una casa que ya pagó no emite recibo ni encola envío.
 
-### Fase 7 — Sheets, panel y cierre de mes
+### Fase 7 — Panel y cierre de mes
 
 Hecho:
 
@@ -359,15 +362,13 @@ Hecho:
   monto (H9), **un usuario por persona con su rol** y límite de intentos de login, todo con
   `eventos`.
 - Cierre de mes con cuadres y bloqueo (`cierre-mes`, manual, con el período como input).
-- Pantallas que el plan pedía en Sheets y que quedaron en el panel: Dashboard, Pendientes,
+- Las cinco pantallas que el plan pedía en Sheets, construidas en el panel: Dashboard, Pendientes,
   Excepciones, Recibos no entregados y Cierres.
 - Fuera el almacenamiento en Sheets, las pestañas sin uso y `activeMessages`. Ya no queda
   ninguna referencia a los tres.
 
 Falta:
 
-- **`sincronizar-sheets` y las pestañas de solo lectura.** Es lo único de esta fase que sigue
-  sin construirse; la pregunta de si todavía hace falta está en la sección 7.
 - **`status-machine.ts` en todas las transiciones.** Hoy lo usa `acciones-panel.ts` y nada
   más. Las demás transiciones son correctas, pero cada una decide por su cuenta: la máquina de
   estados existe y no es todavía el único camino.
@@ -383,14 +384,13 @@ Falta:
 - Casas vacías o exoneradas.
 - Saldo inicial de cada casa. Es un dato, no una regla: la tabla `ajustes` y la importación en
   `/admin/saldos` ya existen y esperan los montos.
-- **¿Sigue haciendo falta Google Sheets?** El plan la pedía como destino de solo lectura para
-  el dashboard, los pendientes, las excepciones y los cierres. Esas cinco vistas están hoy en
-  el panel. Construir `sincronizar-sheets` volvería a traer una cuenta de servicio de Google y
-  sus credenciales, así que conviene decidirlo antes y no por inercia.
 - 10–20 comprobantes reales anonimizados. Hay dos en los fixtures; más casos reales es lo que
   haría al parser confiable de verdad.
 
 Resuelto desde la última versión de este documento:
+
+- **Google Sheets: no.** Eduardo la descartó en todo punto (sección 1). Las cinco vistas que
+  iba a servir están en el panel, y no se agrega ninguna dependencia ni credencial de Google.
 
 - **El CSV de BAC.** El formato real está adaptado y documentado en
   `docs/EXTRACTO_BANCARIO.md`: no es una tabla sino tres secciones, y `src/bank/bac-csv.ts`
