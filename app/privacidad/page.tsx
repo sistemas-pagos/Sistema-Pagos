@@ -100,7 +100,6 @@ export default function PrivacidadPage() {
           <li><strong>Vercel</strong>: alojamiento del punto de entrada que recibe los mensajes.</li>
           <li><strong>Turso</strong>: base de datos donde se guarda el registro de pagos.</li>
           <li><strong>GitHub Actions</strong>: procesamiento de los comprobantes.</li>
-          <li><strong>Google (Sheets)</strong>: hojas de consulta para quien administra el cobro.</li>
         </ul>
         <p>
           También se comparten con quien la ley obligue, por ejemplo ante un requerimiento judicial.

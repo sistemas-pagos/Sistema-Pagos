@@ -64,8 +64,8 @@ hoja de cálculo, ni Drive. Turso es la única base y el panel muestra lo que an
 una hoja.
 
 Esto importa al montar producción porque **es una credencial menos que existe y que habría que
-cuidar**. Si en algún momento se agrega la sincronización de solo lectura con Sheets que
-`docs/PLAN.md` deja abierta, se documentará aquí entonces.
+cuidar**. No es un pendiente: Sheets quedó descartada en todo punto (`docs/PLAN.md`, sección 1),
+así que no hay nada de Google por configurar ni ahora ni después.
 
 ## 3. Retención de comprobantes
 

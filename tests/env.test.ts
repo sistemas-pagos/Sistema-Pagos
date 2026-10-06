@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LARGO_MINIMO_SECRETO, env, resetEnvForTests } from '@/src/config/env';
 
@@ -118,5 +118,39 @@ describe('el contrato de entorno no pide lo que no usa', () => {
     const paquete = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     const todas = { ...paquete.dependencies, ...paquete.devDependencies };
     expect(Object.keys(todas)).not.toContain('googleapis');
+  });
+});
+
+/**
+ * Sheets quedo descartada en todo punto (docs/PLAN.md, seccion 1).
+ *
+ * El contrato de entorno ya estaba limpio, pero el modulo `sheets-schema.ts`
+ * seguia en el arbol —vivo solo para su propia prueba—, `next.config.ts`
+ * declaraba `googleapis` como paquete externo sin que fuera dependencia, y la
+ * politica de privacidad le decia al vecino que sus datos pasaban por Google.
+ * Tres cosas que no hacian nada salvo volver creible una integracion que no
+ * existe, y que son justo por donde vuelve una decision ya tomada.
+ *
+ * Las paginas se leen como texto porque lo que se prueba es lo que dicen, no
+ * lo que calculan.
+ */
+describe('no queda nada de Google', () => {
+  const leer = (ruta: string) => readFileSync(new URL(`../${ruta}`, import.meta.url), 'utf8');
+
+  it('no hay modulo de Sheets', () => {
+    expect(existsSync(new URL('../src/storage/sheets-schema.ts', import.meta.url))).toBe(false);
+  });
+
+  it('next.config no declara googleapis', () => {
+    expect(leer('next.config.ts')).not.toMatch(/googleapis/);
+  });
+
+  /** Es una promesa sobre datos de terceros: no puede nombrar a quien no procesa nada. */
+  it('la politica de privacidad no nombra a Google', () => {
+    expect(leer('app/privacidad/page.tsx')).not.toMatch(/Google/);
+  });
+
+  it('la pagina publica no promete Sheets', () => {
+    expect(leer('app/page.tsx')).not.toMatch(/Sheets|Google/);
   });
 });

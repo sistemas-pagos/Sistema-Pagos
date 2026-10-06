@@ -32,18 +32,19 @@ export default async function HomePage() {
           <h1>Pagos residenciales por WhatsApp</h1>
           <p className="lead">
             Plataforma para recibir comprobantes por WhatsApp, extraer datos, identificar la vivienda por etapa + bloque + casa,
-            detectar posibles duplicados y mantener la cobranza mensual bajo control.
+            detectar posibles duplicados y mantener la cobranza mensual bajo control. El cobro <strong>en efectivo</strong> se
+            registra desde el teléfono del cobrador, en la puerta, y emite el mismo recibo numerado.
           </p>
         </div>
         <div className="hero__flow" aria-label="Flujo del sistema">
-          {['WhatsApp', 'Validación de archivo', 'OCR local', 'Parser BAC', 'Etapa + bloque + casa', 'Filtro de duplicados', 'Google Sheets', 'Dashboard'].map((step, index, array) => (
+          {['WhatsApp', 'Validación de archivo', 'OCR local', 'Parser BAC', 'Etapa + bloque + casa', 'Filtro de duplicados', 'Extracto del banco', 'Recibo por WhatsApp'].map((step, index, array) => (
             <div className="flow-step" key={step}><strong>{step}</strong>{index < array.length - 1 && <span className="flow-arrow">↓</span>}</div>
           ))}
         </div>
       </section>
 
       <div className="notice">
-        Un comprobante leído por OCR no demuestra que el dinero exista. El sistema separa <strong>comprobante recibido</strong> de <strong>pago verificado</strong>; inicialmente un encargado confirma el movimiento directamente en el banco y pulsa Verificar. La cuota normal es <strong>L150.00</strong>; cualquier monto diferente queda en revisión.
+        Un comprobante leído por OCR no demuestra que el dinero exista. El sistema separa <strong>comprobante recibido</strong> de <strong>pago verificado</strong>: una transferencia solo se da por pagada cuando aparece en el <strong>extracto del banco</strong>, y cada movimiento verifica un solo pago. Un monto que es múltiplo exacto de la cuota se reparte entre los meses atrasados; cualquier otro queda en revisión.
       </div>
 
       <div className="section-head"><div><p className="eyebrow">Resumen mensual</p><h2>{periodLabel(snapshot.period)}</h2></div><p>Escenario demostrativo de 12 viviendas</p></div>
@@ -68,6 +69,13 @@ export default async function HomePage() {
           </article>
         ))}
       </section>
+
+      <div className="notice">
+        Hay <strong>dos formas de pagar</strong> y las dos terminan en un recibo numerado de una sola secuencia, que nunca se
+        reutiliza. La <strong>transferencia</strong> llega por WhatsApp y se verifica contra el extracto del banco. El{' '}
+        <strong>efectivo</strong> lo registra el cobrador en su teléfono: marca los meses, el total sale de la cuota de cada uno
+        —nunca se escribe a mano— y el recibo sale en el momento.
+      </div>
 
       <div className="section-head"><div><p className="eyebrow">Demo interactiva</p><h2>Del comprobante a la respuesta</h2></div><p>Parser real sobre fixtures sintéticos</p></div>
       <DemoWorkbench />
@@ -98,11 +106,11 @@ export default async function HomePage() {
       <section className="queues">
         <article className="queue"><h3>Sin identificar</h3><p>Si falta etapa, bloque o casa, WhatsApp solicita E1 B4 C18 sin repetir OCR.</p><strong>{snapshot.unidentified.length}</strong></article>
         <article className="queue"><h3>Duplicados</h3><p>El mismo archivo exacto no vuelve a sumar. Una referencia repetida pasa a revisión, no se descarta automáticamente.</p><strong>{snapshot.duplicates.length}</strong></article>
-        <article className="queue"><h3>En revisión</h3><p>Referencias repetidas, monto distinto de L150, datos incompatibles o validación insuficiente.</p><strong>{snapshot.review.length}</strong></article>
+        <article className="queue"><h3>En revisión</h3><p>Referencias repetidas, montos que no son múltiplo de la cuota, datos incompatibles o validación insuficiente.</p><strong>{snapshot.review.length}</strong></article>
       </section>
 
       <footer className="footer">
-        <span>Next.js · TypeScript · WhatsApp Cloud API · Tesseract.js · Google Sheets API</span>
+        <span>Next.js · TypeScript · WhatsApp Cloud API · Tesseract.js · Turso · GitHub Actions</span>
         <span>Sin credenciales, PII ni comprobantes reales en esta demo.</span>
         <Link className="admin-link" href="/privacidad">Política de privacidad</Link>
       </footer>
