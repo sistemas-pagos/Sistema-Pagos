@@ -117,6 +117,11 @@ Separar variables de Preview y Production. Los secretos de producción no deben 
 
 Variables de autenticación:
 
+- `PAGOS_BANCO_DEPOSITO` y `PAGOS_CUENTA_DEPOSITO` — el banco y el número de cuenta donde el
+  residente deposita, más `EXPECTED_BENEFICIARY` con el nombre del titular. No son secretos
+  —son justamente lo que hay que repartir— pero van en variables y no en el código, porque el
+  repositorio es público y la cuenta puede cambiar. Si faltan, el mensaje de bienvenida sale
+  igual, sin esas líneas.
 - `ADMIN_ACCESS_KEY` — clave larga y aleatoria;
 - `AUTH_SESSION_SECRET` — secreto aleatorio independiente.
 

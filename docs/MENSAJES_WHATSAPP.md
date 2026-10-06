@@ -16,6 +16,34 @@ Dos reglas que valen para todos:
 
 ---
 
+## 0. Escribe al número por primera vez
+
+Antes de mandar ningún comprobante:
+
+```
+¡Hola! Acá se reciben los pagos del tren de aseo.
+
+Para pagar por transferencia:
+Banco: <PAGOS_BANCO_DEPOSITO>
+Cuenta: <PAGOS_CUENTA_DEPOSITO>
+A nombre de: <EXPECTED_BENEFICIARY>
+
+Cuando hayas depositado, mandá acá la *captura del comprobante* y tu vivienda.
+Si vivís en la etapa 3, bloque 1, casa 1, tu dirección se escribe así: E3-B1-C1
+
+Te confirmamos en cuanto el pago aparezca en el estado de cuenta del banco.
+```
+
+Las tres líneas de la cuenta salen de variables de entorno. **Si no están configuradas, el
+mensaje sale igual sin ellas**: medio instructivo es mejor que ninguno, y una cuenta inventada
+sería mucho peor.
+
+Sale **solo en el primer contacto**: a un número que ya tiene pagos no se le repiten las
+instrucciones. Desde octubre de 2026 Meta cobra también los mensajes de servicio, así que
+contestarle las instrucciones a cada «gracias» sería ruido pago.
+
+---
+
 ## 1. Manda un comprobante
 
 ### Sale bien
@@ -57,9 +85,14 @@ falta un dato que ya mandó lo hace buscar el error donde no está.
 ### El monto no es el de la cuota
 
 ```
-Recibimos tu comprobante y lo estamos revisando. Te avisamos en cuanto quede confirmado
-contra el estado de cuenta del banco.
+Recibimos tu comprobante y lo estamos revisando.
+El monto no coincide con la cuota, así que lo revisa una persona antes de aplicarlo.
+Te avisamos en cuanto quede confirmado contra el estado de cuenta del banco.
 ```
+
+La segunda línea solo sale cuando el motivo es el monto. Los motivos que son nuestros —una
+referencia repetida, un dato que no se leyó— no se detallan: no le sirven al residente y dan
+más información de la necesaria sobre cómo funciona el sistema por dentro.
 
 El pago queda `EN_REVISION` para que lo mire una persona. Hoy **cualquier** monto distinto de
 la cuota cae acá, el múltiplo exacto incluido (ver sección 7 del plan).
@@ -160,7 +193,7 @@ plantilla aprobada `recibo_pago` (invariante 13). El cuerpo está en
 
 ```
 Recibo REC-000012
-Vivienda: E1-B4-C18
+Vivienda: Etapa 1, Bloque 4, Casa 18
 Mes: septiembre de 2026
 Monto: L150.00
 Forma de pago: Transferencia
@@ -168,6 +201,13 @@ Referencia: ****4821
 Fecha de pago: 07/09/2026
 Verificado: 09/09/2026
 ```
+
+La vivienda va **escrita con todas las letras**, no como `E1-B4-C18`: el recibo es el
+comprobante que el residente guarda y que puede terminar mostrándole a un tercero.
+
+**El cobro en efectivo usa esta misma plantilla**, no hay una aparte. Cambia lo que va en los
+huecos: «Efectivo» en forma de pago, sin referencia bancaria, y la fecha de verificación es la
+del cobro. Sale en el momento, no horas después.
 
 Dos casos donde **no** sale ningún recibo:
 

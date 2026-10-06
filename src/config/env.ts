@@ -58,6 +58,14 @@ const envSchema = z.object({
   PAGOS_CONFIRMACION_MINUTOS: z.preprocess(enBlancoEsAusente, z.coerce.number().int().positive().max(48 * 60).default(120)),
   EXPECTED_BENEFICIARY: optionalString,
   EXPECTED_ACCOUNT_LAST4: optionalLast4,
+  // Los datos que se le dan al residente para que deposite. No son secretos
+  // —son justamente lo que hay que repartir— pero tampoco van en el codigo: el
+  // repositorio es publico y la cuenta puede cambiar.
+  //
+  // `EXPECTED_ACCOUNT_LAST4` es otra cosa: sirve para verificar que el deposito
+  // entro a la cuenta correcta, y por eso guarda solo cuatro digitos.
+  PAGOS_CUENTA_DEPOSITO: optionalString,
+  PAGOS_BANCO_DEPOSITO: optionalString,
   // Turso: fuente de verdad del registro de mensajes (fase 1 en adelante).
   PAGOS_TURSO_URL: optionalString,
   PAGOS_TURSO_TOKEN: optionalString,
