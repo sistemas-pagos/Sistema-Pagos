@@ -192,13 +192,18 @@ async function resolveHome(store: PaymentStore, parsedHome: HomeRef | undefined)
   // Se devuelve la ficha del padron, no solo la referencia: la fecha de alta
   // decide desde que mes se le cobra a esta vivienda (invariante 5).
   const match = homes.find((home) =>
-    home.active
-    && home.stage === parsedHome.stage
+    home.stage === parsedHome.stage
     && home.block === parsedHome.block
     && home.house === parsedHome.house,
   );
-  if (match) return { home: match };
-  return { warning: 'receipt_home_not_in_master' };
+  if (!match) return { warning: 'receipt_home_not_in_master' };
+  // La casa existe pero no paga el servicio. Antes se buscaba solo entre las
+  // activas, asi que el comprobante caia como «no esta en el padron» y el
+  // sistema le pedia al residente una E/B/C que ya habia mandado bien. Va a
+  // revision del admin, que es quien decide si hay que volver a activarla: una
+  // casa inactiva que paga es justo esa.
+  if (!match.active) return { home: match, warning: 'home_inactive' };
+  return { home: match };
 }
 
 export async function processReceiptMessage(input: ReceiptMessageInput, deps: ProcessorDependencies): Promise<ProcessOutcome> {
@@ -427,8 +432,7 @@ export async function processHomeReply(messageId: string, phone: string, body: s
 
   const homes = await store.listHomes();
   const known = homes.find((candidate) =>
-    candidate.active
-    && candidate.stage === home.stage
+    candidate.stage === home.stage
     && candidate.block === home.block
     && candidate.house === home.house,
   );
@@ -452,7 +456,12 @@ export async function processHomeReply(messageId: string, phone: string, body: s
   const period = assignServicePeriod(known, payment.transactionDate, allPayments, now, payment.id);
   // Decir de que casa es resuelve estos tres motivos y ninguno mas: si el pago
   // estaba en revision por el monto o por el beneficiario, sigue estandolo.
-  const clearedReason = RESUELTOS_POR_LA_VIVIENDA.has(payment.reviewReason ?? '') ? undefined : payment.reviewReason;
+  // Que el residente diga de que casa es no arregla que la casa no pague el
+  // servicio: ese motivo lo resuelve el admin, no el.
+  const resueltoPorLaVivienda = RESUELTOS_POR_LA_VIVIENDA.has(payment.reviewReason ?? '');
+  const clearedReason = known.active
+    ? (resueltoPorLaVivienda ? undefined : payment.reviewReason)
+    : 'home_inactive';
   let updated: PaymentRecord = {
     ...payment,
     stage: home.stage,

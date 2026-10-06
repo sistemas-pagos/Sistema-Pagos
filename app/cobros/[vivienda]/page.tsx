@@ -158,11 +158,14 @@ export default async function CobrarCasaPage({ params, searchParams }: Params) {
       )}
 
       {!home.active && (
-        <div className="cob__nota cob__nota--aviso">
-          <strong>Esta casa está marcada como inactiva</strong>, así que no paga el servicio y no
-          se le puede cobrar desde acá. Si tiene que pagar, un administrador la pone activa en el
-          panel y volvés a entrar.
-        </div>
+        <>
+          <div className="cob__nota cob__nota--aviso">
+            <strong>Esta casa está marcada como inactiva</strong>: no paga el servicio, así que no
+            se le cobran meses. Si ya le recibiste la plata, registrala acá abajo y el
+            administrador decide — es él quien la vuelve a activar.
+          </div>
+          <RegistroEnRevision viviendaId={home.id} />
+        </>
       )}
 
       {home.active && pagados.length > 0 && (

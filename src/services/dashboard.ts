@@ -12,6 +12,11 @@ function isReceived(payment: PaymentRecord): boolean {
   return RECEIVED_STATUSES.has(payment.status) && payment.status !== 'DUPLICADO' && payment.status !== 'RECHAZADO';
 }
 
+/** Una casa que todavia no existia en ese mes no se cuenta ni como inactiva. */
+function existeEnElPeriodo(home: { startDate?: string }, period: string): boolean {
+  return !home.startDate || home.startDate.slice(0, 7) <= period;
+}
+
 function accountingPayments(payments: readonly PaymentRecord[]): PaymentRecord[] {
   return payments.filter((payment) => payment.status !== 'DUPLICADO' && payment.status !== 'RECHAZADO');
 }
@@ -19,6 +24,13 @@ function accountingPayments(payments: readonly PaymentRecord[]): PaymentRecord[]
 export async function buildDashboardSnapshot(store: PaymentStore, period: string): Promise<DashboardSnapshot> {
   const [allHomes, storedPayments] = await Promise.all([store.listHomes(), store.listPayments()]);
   const homes = allHomes.filter((home) => isHomeActiveInPeriod(home, period));
+  // Las que no pagan el servicio se cuentan aparte y no entran en nada mas: ni
+  // en el total de viviendas, ni en lo esperado, ni en lo pendiente. Se miran
+  // solo las que ya existian en el periodo, para no contar una casa dada de
+  // alta despues.
+  const inactiveHomes = allHomes.filter(
+    (home) => !isHomeActiveInPeriod(home, period) && existeEnElPeriodo(home, period),
+  ).length;
   const activeHomeKeys = new Set(homes.map(homeKey));
   const homesByKey = new Map(homes.map((home) => [homeKey(home), home]));
   const allPayments = storedPayments.filter((payment) => mesesDelPago(payment).includes(period));
@@ -83,6 +95,7 @@ export async function buildDashboardSnapshot(store: PaymentStore, period: string
   return {
     period,
     totalHomes: monthlyStatus.length,
+    inactiveHomes,
     paidHomes: paidRows.length,
     verifyingHomes: verifyingRows.length,
     reviewHomes: reviewRows.length,

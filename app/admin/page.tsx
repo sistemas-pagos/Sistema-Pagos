@@ -50,6 +50,7 @@ const DUPLICATE_REASON_LABEL: Record<string, string> = {
   service_period_already_has_payment: 'La vivienda ya tiene un pago asignado a ese mes',
   amount_below_expected: 'Monto menor a la cuota esperada de L150.00',
   amount_above_expected: 'Monto mayor a la cuota esperada de L150.00',
+  home_inactive: 'La vivienda está inactiva: pagó sin estar en la lista de cobro',
 };
 
 export default async function AdminPage({
@@ -118,6 +119,7 @@ export default async function AdminPage({
 
       <section className="kpis">
         <div className="kpi"><span>Viviendas activas</span><strong>{snapshot.totalHomes}</strong><small>Base maestra vigente en el período</small></div>
+        <div className="kpi"><span>Viviendas inactivas</span><strong>{snapshot.inactiveHomes}</strong><small>No pagan el servicio; no suman en ningún otro número</small></div>
         <div className="kpi"><span>Pagadas</span><strong>{snapshot.paidHomes}</strong><small>Pago confirmado en el banco</small></div>
         <div className="kpi"><span>Pendientes</span><strong>{snapshot.pendingHomes}</strong><small>Sin comprobante utilizable para el mes</small></div>
         <div className="kpi"><span>Por verificar</span><strong>{snapshot.verifyingHomes}</strong><small>Comprobante recibido; falta confirmar en banco</small></div>

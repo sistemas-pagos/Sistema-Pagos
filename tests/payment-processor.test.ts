@@ -166,3 +166,64 @@ describe('payment processor', () => {
     expect(second.reason).toBe('pending_context_conflict');
   });
 });
+
+/**
+ * Un pago que llega de una casa que no paga el servicio.
+ *
+ * Antes `resolveHome` buscaba solo entre las casas activas, asi que el
+ * comprobante de una casa inactiva caia como «no esta en el padron»: el sistema
+ * le pedia al residente la etapa, bloque y casa que ya habia mandado bien, y
+ * despues de tres intentos el pago moria en revision con el motivo equivocado.
+ *
+ * Eduardo lo decidio asi el 6 de octubre de 2026: va directo a revision del
+ * admin, igual que el efectivo. Una casa inactiva que paga es justo la que hay
+ * que volver a activar, y el admin tiene que enterarse.
+ */
+describe('un pago de una casa inactiva', () => {
+  const inactiva: HomeRecord[] = [
+    { id: 'home-e1-b4-c18', stage: '1', block: '4', house: '18', monthlyFee: 150, active: false },
+  ];
+
+  it('va a revision en vez de pedirle la vivienda al residente', async () => {
+    const store = new MemoryPaymentStore({ homes: inactiva }, now);
+
+    const result = await processReceiptMessage({
+      messageId: 'msg-inactiva', phone: '+50400000999', bytes: png(21),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
+    }, { store, now });
+
+    expect(result.status).toBe('EN_REVISION');
+    expect(result.reason).toBe('home_inactive');
+  });
+
+  /** La vivienda queda escrita: el admin tiene que saber de cual se trata. */
+  it('deja la vivienda asignada al pago', async () => {
+    const store = new MemoryPaymentStore({ homes: inactiva }, now);
+
+    await processReceiptMessage({
+      messageId: 'msg-inactiva-2', phone: '+50400000999', bytes: png(22),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
+    }, { store, now });
+
+    const pago = (await store.listPayments())[0];
+    expect(pago.stage).toBe('1');
+    expect(pago.block).toBe('4');
+    expect(pago.house).toBe('18');
+    expect(pago.reviewReason).toBe('home_inactive');
+  });
+
+  /** Y si el residente contesta de que casa es, el motivo no se limpia. */
+  it('contestar la vivienda no saca el pago de revision', async () => {
+    const store = new MemoryPaymentStore({ homes: inactiva }, now);
+    await processReceiptMessage({
+      messageId: 'msg-inactiva-3', phone: '+50400000999', bytes: png(23),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.missingHome,
+    }, { store, now });
+
+    await processHomeReply('msg-respuesta', '+50400000999', 'E1 B4 C18', { store, now });
+
+    const pago = (await store.listPayments())[0];
+    expect(pago.status).toBe('EN_REVISION');
+    expect(pago.reviewReason).toBe('home_inactive');
+  });
+});

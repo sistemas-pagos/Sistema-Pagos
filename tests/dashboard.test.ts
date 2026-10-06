@@ -140,3 +140,49 @@ describe('las dos pantallas cuentan lo mismo', () => {
     expect((await buildDashboardSnapshot(store, '2026-10')).paidHomes).toBe(1);
   });
 });
+
+/**
+ * Las viviendas inactivas se cuentan aparte y en ningun otro lado.
+ *
+ * Eduardo: «en el monto esperado solo deberia de sumar lo de las cuentas
+ * activas; si esta inactiva no deberia de sumar en nada mas que en el campo de
+ * viviendas inactivas». Una casa que no paga el servicio no debe nada, asi que
+ * contarla como pendiente inflaria la deuda con plata que nadie tiene que pagar.
+ */
+describe('viviendas inactivas en el dashboard', () => {
+  const PERIODO = '2026-09';
+
+  const vivienda = (house: string, active: boolean): HomeRecord => ({
+    id: `home-e1-b1-c${house}`, stage: '1', block: '1', house,
+    monthlyFee: 150, active, startDate: '2026-09-01',
+  });
+
+  it('no suman en el total, ni en lo esperado, ni en lo pendiente', async () => {
+    const store = new MemoryPaymentStore({
+      homes: [vivienda('1', true), vivienda('2', true), vivienda('3', false)],
+    });
+
+    const snapshot = await buildDashboardSnapshot(store, PERIODO);
+
+    expect(snapshot.inactiveHomes).toBe(1);
+    expect(snapshot.totalHomes).toBe(2);
+    expect(snapshot.expectedAmount).toBe(300);
+    expect(snapshot.pendingAmount).toBe(300);
+    expect(snapshot.pendingHomes).toBe(2);
+  });
+
+  it('sin inactivas el campo queda en cero', async () => {
+    const store = new MemoryPaymentStore({ homes: [vivienda('1', true)] });
+
+    expect((await buildDashboardSnapshot(store, PERIODO)).inactiveHomes).toBe(0);
+  });
+
+  /** Una casa dada de alta despues no se cuenta ni como inactiva. */
+  it('una casa que todavia no existia no se cuenta', async () => {
+    const store = new MemoryPaymentStore({
+      homes: [{ ...vivienda('9', false), startDate: '2026-12-01' }],
+    });
+
+    expect((await buildDashboardSnapshot(store, PERIODO)).inactiveHomes).toBe(0);
+  });
+});

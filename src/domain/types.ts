@@ -179,6 +179,14 @@ export interface DashboardPaymentRow extends PaymentRecord {
 export interface DashboardSnapshot {
   period: string;
   totalHomes: number;
+  /**
+   * Homes that do not pay the service in this period.
+   *
+   * They count here and **nowhere else**: not in `totalHomes`, not in
+   * `expectedAmount`, not in `pendingAmount`. An inactive home owes nothing, so
+   * counting it as pending would inflate the debt with money nobody has to pay.
+   */
+  inactiveHomes: number;
   /** Homes with at least one bank-verified payment for the service month. */
   paidHomes: number;
   /** Homes with a receipt assigned but still awaiting bank verification. */
