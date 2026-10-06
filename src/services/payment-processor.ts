@@ -109,11 +109,23 @@ function receiptAcceptedReply(payment: PaymentRecord): string {
   return lines.join('\n');
 }
 
+/**
+ * El ejemplo, traducido de como lo dice el vecino a como se escribe.
+ *
+ * «Por ejemplo: E1 B4 C18» da el resultado sin dar la regla: quien no la
+ * entendio no sabe que E, B y C son etapa, bloque y casa. Mostrar las dos
+ * formas de la misma direccion la ensena en una linea.
+ *
+ * El parser acepta `E3-B1-C1`, `E3 B1 C1`, `E3B1C1` y «etapa 3 bloque 1 casa
+ * 1»; se ensena la de guiones porque es la mas facil de copiar sin error.
+ */
+const EJEMPLO_DE_VIVIENDA = 'Si vivís en la etapa 3, bloque 1, casa 1, tu dirección se escribe así: E3-B1-C1';
+
 function unidentifiedReply(payment: PaymentRecord): string {
   return [
     `Recibimos tu comprobante por ${amountLabel(payment.amount)}, pero falta saber de qué vivienda es.`,
-    'Respondé con etapa, bloque y casa. Por ejemplo: E1 B4 C18',
-    'También sirve escribirlo: "etapa 1, bloque 4, casa 18".',
+    'Respondé con tu etapa, bloque y casa.',
+    EJEMPLO_DE_VIVIENDA,
   ].join('\n');
 }
 
@@ -128,7 +140,8 @@ function viviendaNoEntendidaReply(intento: number): string {
     : 'Escribí solo la vivienda, sin el nombre ni el mes.';
   return [
     'No logramos identificar la vivienda.',
-    'Necesitamos las tres cosas: etapa, bloque y casa. Por ejemplo: E1 B4 C18',
+    'Necesitamos las tres cosas: etapa, bloque y casa.',
+    EJEMPLO_DE_VIVIENDA,
     cierre,
   ].join('\n');
 }
@@ -138,7 +151,8 @@ function viviendaDesconocidaReply(intento: number): string {
   return [
     'No encontramos esa vivienda.',
     'Puede que la etapa, el bloque o la casa estén escritos distinto. Verificá los tres y volvé a enviarlos.',
-    restantes === 1 ? 'Si no sale esta vez, lo revisa una persona.' : 'Por ejemplo: E1 B4 C18',
+    EJEMPLO_DE_VIVIENDA,
+    ...(restantes === 1 ? ['Si no sale esta vez, lo revisa una persona.'] : []),
   ].join('\n');
 }
 
@@ -154,7 +168,7 @@ function viviendaDelComprobanteNoExisteReply(payment: PaymentRecord): string {
   return [
     `Recibimos tu comprobante por ${amountLabel(payment.amount)}, pero no encontramos esa vivienda.`,
     'Puede que la etapa, el bloque o la casa estén escritos distinto. Verificá los tres.',
-    'Respondé con la vivienda correcta. Por ejemplo: E1 B4 C18',
+    EJEMPLO_DE_VIVIENDA,
   ].join('\n');
 }
 

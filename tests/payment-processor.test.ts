@@ -4,6 +4,7 @@ import { SYNTHETIC_BAC_RECEIPTS } from '@/src/demo/data';
 import type { HomeRecord, PaymentRecord } from '@/src/domain/types';
 import { processHomeReply, processReceiptMessage } from '@/src/services/payment-processor';
 import { MemoryPaymentStore } from '@/src/storage/memory';
+import { parseHomeReference } from '@/src/domain/housing';
 
 const homes: HomeRecord[] = [
   { id: 'home-e1-b4-c18', stage: '1', block: '4', house: '18', monthlyFee: 150, active: true },
@@ -89,7 +90,7 @@ describe('payment processor', () => {
 
     expect(received.status).toBe('ESPERANDO_RESPUESTA');
     // Lo que importa es que el mensaje muestre el formato, no como lo introduce.
-    expect(received.reply).toContain('E1 B4 C18');
+    expect(received.reply).toContain('E3-B1-C1');
     expect(await store.getPendingByPhone('+50400000999')).toBeDefined();
 
     const incomplete = await processHomeReply('msg-incomplete', '+50400000999', 'B4 C18', { store, now });
@@ -265,5 +266,61 @@ describe('el mensaje cuando no se encuentra la vivienda', () => {
     }, { store, now });
 
     expect(result.reply).toContain('falta saber de qué vivienda es');
+  });
+});
+
+/**
+ * Los mensajes que explican el formato ensenan la regla, no solo el resultado.
+ *
+ * «Por ejemplo: E1 B4 C18» dice como queda, pero no por que: quien no entendio
+ * el formato no sabe que E, B y C son etapa, bloque y casa. El ejemplo que
+ * pidio Eduardo traduce las dos formas de la misma direccion en una linea, y
+ * `parseHomeReference` acepta las dos —se verifico antes de ensenarla—.
+ */
+describe('el ejemplo de como se escribe la vivienda', () => {
+  const otras: HomeRecord[] = [
+    { id: 'home-e9-b9-c9', stage: '9', block: '9', house: '9', monthlyFee: 150, active: true },
+  ];
+
+  const esperado = 'etapa 3, bloque 1, casa 1';
+
+  it('sale cuando el comprobante no trae vivienda', async () => {
+    const store = new MemoryPaymentStore({ homes: otras }, now);
+    const result = await processReceiptMessage({
+      messageId: 'msg-ej-1', phone: '+50400000901', bytes: png(41),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.missingHome,
+    }, { store, now });
+
+    expect(result.reply).toContain(esperado);
+    expect(result.reply).toContain('E3-B1-C1');
+  });
+
+  it('sale cuando la vivienda del comprobante no existe', async () => {
+    const store = new MemoryPaymentStore({ homes: otras }, now);
+    const result = await processReceiptMessage({
+      messageId: 'msg-ej-2', phone: '+50400000902', bytes: png(42),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.valid,
+    }, { store, now });
+
+    expect(result.reply).toContain(esperado);
+    expect(result.reply).toContain('E3-B1-C1');
+  });
+
+  it('sale cuando el residente contesta una vivienda que no existe', async () => {
+    const store = new MemoryPaymentStore({ homes: otras }, now);
+    await processReceiptMessage({
+      messageId: 'msg-ej-3', phone: '+50400000903', bytes: png(43),
+      declaredMime: 'image/png', syntheticOcrText: SYNTHETIC_BAC_RECEIPTS.missingHome,
+    }, { store, now });
+
+    const result = await processHomeReply('msg-ej-3b', '+50400000903', 'E5 B5 C5', { store, now });
+
+    expect(result.reply).toContain(esperado);
+    expect(result.reply).toContain('E3-B1-C1');
+  });
+
+  /** Lo que se ensena tiene que funcionar: el parser acepta esa direccion. */
+  it('el formato que se ensena es uno que el parser entiende', () => {
+    expect(parseHomeReference('E3-B1-C1')).toEqual({ stage: '3', block: '1', house: '1' });
   });
 });
