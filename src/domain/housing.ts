@@ -148,6 +148,20 @@ export function codigoConGuiones(codigo: string): string {
   return partes ? homeCodeLegible(partes) : codigo;
 }
 
+/**
+ * La vivienda escrita con todas las letras, para el recibo.
+ *
+ * `E1-B4-C18` lo entiende quien ya sabe que E, B y C son etapa, bloque y casa.
+ * El recibo es el comprobante que el residente guarda y que puede terminar
+ * mostrandole a un tercero, asi que ahi se escribe entero. Comas y no «·»:
+ * el punto medio se ve raro en WhatsApp segun el telefono.
+ */
+export function viviendaParaRecibo(codigo: string): string {
+  const partes = parseHomeReference(codigo);
+  if (!partes) return codigo;
+  return `Etapa ${partes.stage}, Bloque ${partes.block}, Casa ${partes.house}`;
+}
+
 export function homeLabel(home: HomeRef | undefined): string {
   return home ? `Etapa ${home.stage} · Bloque ${home.block} · Casa ${home.house}` : 'Sin identificar';
 }

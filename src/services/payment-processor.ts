@@ -179,8 +179,66 @@ function aRevisionHumanaReply(): string {
   ].join('\n');
 }
 
-function reviewReply(): string {
-  return 'Recibimos tu comprobante y lo estamos revisando. Te avisamos en cuanto quede confirmado contra el estado de cuenta del banco.';
+/**
+ * Por que quedo en revision, cuando se puede decir sin exponer nada.
+ *
+ * «Lo estamos revisando» a secas deja al residente sin saber si hizo algo mal
+ * ni si tiene que hacer algo. Cuando el motivo es suyo —el monto— se le dice,
+ * porque es lo unico que el puede entender y, si fue un error, corregir.
+ *
+ * Los motivos que son nuestros (una referencia repetida, un dato que no se
+ * leyo) no se detallan: no le sirven para nada y dan mas informacion de la que
+ * hace falta sobre como funciona el sistema por dentro.
+ */
+const PORQUE_ESTA_EN_REVISION: Record<string, string> = {
+  amount_below_expected: 'El monto no coincide con la cuota, así que lo revisa una persona antes de aplicarlo.',
+  amount_above_expected: 'El monto no coincide con la cuota, así que lo revisa una persona antes de aplicarlo.',
+};
+
+/**
+ * Lo primero que lee alguien que escribe al numero sin haber mandado nada.
+ *
+ * Antes no se le contestaba nada: el mensaje se marcaba `ignored` y el vecino
+ * se quedaba mirando el chat sin saber si el numero existia. Es el peor momento
+ * para el silencio, porque es justo cuando no sabe que hacer.
+ *
+ * Lleva los datos de la cuenta porque es lo que vino a preguntar. Si no estan
+ * configurados, el mensaje sale igual sin esas lineas: medio instructivo es
+ * mejor que ninguno, y poner una cuenta inventada seria mucho peor.
+ *
+ * Es un mensaje **dentro** de la ventana de 24 h, asi que no necesita plantilla
+ * (invariante 13). Desde octubre de 2026 Meta cobra tambien los de servicio, y
+ * por eso sale una sola vez por numero mientras el contexto siga abierto.
+ */
+function bienvenidaReply(): string {
+  const config = env();
+  const cuenta = config.PAGOS_CUENTA_DEPOSITO;
+  const banco = config.PAGOS_BANCO_DEPOSITO;
+  const beneficiario = config.EXPECTED_BENEFICIARY;
+
+  return [
+    '¡Hola! Acá se reciben los pagos del tren de aseo.',
+    '',
+    'Para pagar por transferencia:',
+    ...(banco ? [`Banco: ${banco}`] : []),
+    ...(cuenta ? [`Cuenta: ${cuenta}`] : []),
+    ...(beneficiario ? [`A nombre de: ${beneficiario}`] : []),
+    '',
+    // WhatsApp usa *un* asterisco para negrita; con dos sale el asterisco literal.
+    'Cuando hayas depositado, mandá acá la *captura del comprobante* y tu vivienda.',
+    EJEMPLO_DE_VIVIENDA,
+    '',
+    'Te confirmamos en cuanto el pago aparezca en el estado de cuenta del banco.',
+  ].join('\n');
+}
+
+function reviewReply(motivo?: string): string {
+  const porque = motivo ? PORQUE_ESTA_EN_REVISION[motivo] : undefined;
+  return [
+    'Recibimos tu comprobante y lo estamos revisando.',
+    ...(porque ? [porque] : []),
+    'Te avisamos en cuanto quede confirmado contra el estado de cuenta del banco.',
+  ].join('\n');
 }
 
 function duplicateReply(): string {
@@ -416,7 +474,7 @@ export async function processReceiptMessage(input: ReceiptMessageInput, deps: Pr
         : unidentifiedReply(record);
       return { action: 'reply', reply, paymentId: record.id, status: record.status, reason: reviewReason };
     }
-    if (pendingConflict || record.status === 'EN_REVISION') return { action: 'reply', reply: reviewReply(), paymentId: record.id, status: record.status, reason: record.reviewReason };
+    if (pendingConflict || record.status === 'EN_REVISION') return { action: 'reply', reply: reviewReply(record.reviewReason), paymentId: record.id, status: record.status, reason: record.reviewReason };
     return { action: 'reply', reply: receiptAcceptedReply(record), paymentId: record.id, status: record.status };
   }
 }
@@ -451,8 +509,14 @@ export async function processHomeReply(messageId: string, phone: string, body: s
   const tardio = pending ? undefined : await pagoSinVivienda(store, phone);
 
   if (!pending && !tardio) {
-    await markMessage(store, messageId, 'text', 'ignored', at);
-    return { action: 'silent', reason: 'no_pending_receipt' };
+    // Las instrucciones son para quien **todavia no mando nada**. A quien ya
+    // tiene pagos no se le explican: ya sabe como es, y desde octubre de 2026
+    // Meta cobra tambien los mensajes de servicio, asi que contestarle las
+    // instrucciones a cada «gracias» seria ruido pago.
+    const suyos = (await store.listPayments()).filter((pago) => pago.phone === phone);
+    await markMessage(store, messageId, 'text', suyos.length === 0 ? 'processed' : 'ignored', at);
+    if (suyos.length > 0) return { action: 'silent', reason: 'no_pending_receipt' };
+    return { action: 'reply', reply: bienvenidaReply(), reason: 'sin_contexto' };
   }
 
   const home = parseHomeReference(body);

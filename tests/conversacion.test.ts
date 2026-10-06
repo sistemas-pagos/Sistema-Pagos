@@ -248,16 +248,25 @@ describe('cuando el vecino contesta tarde', () => {
     expect(actualizado.reviewReason).toBe('amount_above_expected');
   });
 
-  /** Un pago ya verificado no se toca: ese vecino no esta contestando nada. */
+  /**
+   * Un pago ya resuelto no se toca: ese vecino no esta contestando nada.
+   *
+   * Antes esto se media por el silencio. Desde el 6 de octubre de 2026 quien
+   * escribe sin haber mandado nada recibe las instrucciones, pero **este** no
+   * es ese caso: ya tiene un pago, asi que sigue en silencio. Lo que la prueba
+   * cuida es lo de siempre, que el pago quede intacto.
+   */
   it('no toca un pago que ya tiene vivienda', async () => {
     const store = new MemoryPaymentStore({ homes }, now);
     await comprobanteSinVivienda(store);
     await processHomeReply('r1', TELEFONO, 'E1 B4 C18', { store, now });
+    const antes = (await store.listPayments())[0];
 
     const resultado = await processHomeReply('tarde', TELEFONO, 'E1 B4 C18', { store, now: dosHorasDespues });
 
     expect(resultado.action).toBe('silent');
     expect(resultado.reason).toBe('no_pending_receipt');
+    expect((await store.listPayments())[0]).toEqual(antes);
   });
 
   /** Sin contexto no hay intentos que gastar: se responde y se deja como esta. */
@@ -289,5 +298,60 @@ describe('cuando el vecino contesta tarde', () => {
     const viejo = pagos.find((pago) => pago.sourceMessageId === 'msg-viejo');
     expect(nuevo?.stage).toBe('1');
     expect(viejo?.stage).toBeUndefined();
+  });
+});
+
+/**
+ * Quien escribe por primera vez recibe instrucciones, no silencio.
+ *
+ * Antes el mensaje se marcaba `ignored` y no se contestaba nada: el vecino se
+ * quedaba mirando el chat sin saber si el numero existia. Es el peor momento
+ * para el silencio, porque es justo cuando no sabe que hacer.
+ *
+ * Solo en el primer contacto: a quien ya tiene pagos no se le explican las
+ * instrucciones de nuevo. Desde octubre de 2026 Meta cobra tambien los mensajes
+ * de servicio, asi que contestarle a cada «gracias» seria ruido pago.
+ */
+describe('el primer mensaje de alguien que nunca escribio', () => {
+  afterEach(() => {
+    delete process.env.PAGOS_CUENTA_DEPOSITO;
+    delete process.env.PAGOS_BANCO_DEPOSITO;
+    delete process.env.EXPECTED_BENEFICIARY;
+    resetEnvForTests();
+  });
+
+  it('recibe el saludo y como pagar', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+
+    const resultado = await processHomeReply('hola-1', '+50499990000', 'buenas', { store, now });
+
+    expect(resultado.action).toBe('reply');
+    expect(resultado.reply).toContain('tren de aseo');
+    expect(resultado.reply).toContain('comprobante');
+  });
+
+  it('da los datos de la cuenta cuando estan configurados', async () => {
+    process.env.PAGOS_BANCO_DEPOSITO = 'Banco de Prueba';
+    process.env.PAGOS_CUENTA_DEPOSITO = '000-000-000';
+    process.env.EXPECTED_BENEFICIARY = 'RESIDENCIAL DEMO';
+    resetEnvForTests();
+    const store = new MemoryPaymentStore({ homes }, now);
+
+    const resultado = await processHomeReply('hola-2', '+50499990001', 'buenas', { store, now });
+
+    expect(resultado.reply).toContain('Banco de Prueba');
+    expect(resultado.reply).toContain('000-000-000');
+    expect(resultado.reply).toContain('RESIDENCIAL DEMO');
+  });
+
+  /** Sin cuenta configurada sale igual: medio instructivo es mejor que ninguno. */
+  it('sin la cuenta configurada igual explica que hacer', async () => {
+    const store = new MemoryPaymentStore({ homes }, now);
+
+    const resultado = await processHomeReply('hola-3', '+50499990002', 'buenas', { store, now });
+
+    expect(resultado.action).toBe('reply');
+    expect(resultado.reply).toContain('comprobante');
+    expect(resultado.reply).not.toContain('Cuenta:');
   });
 });
