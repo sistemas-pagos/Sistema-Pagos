@@ -378,9 +378,17 @@ Falta:
 - Fecha de salida de la lista de cobro.
 - **Tesorero y frecuencia del cierre de caja.** El código no asume ninguna de las dos: cierra
   cuando alguien con rol ADMIN o TESORERO lo hace, y no impone frecuencia.
-- **Tratamiento de montos que no son múltiplos de la cuota.** Sigue abierto para
-  transferencias, donde el vecino manda lo que quiere; con efectivo no puede ocurrir, porque
-  el cobrador marca meses y el total sale de la cuota de cada uno.
+- **Montos distintos de la cuota en transferencias.** Más abierto de lo que decía esta lista:
+  la invariante 6 dice que un múltiplo exacto se reparte entre los meses atrasados, y **eso no
+  está construido**. Hoy `receiptReviewReason` exige el monto exacto de la cuota y manda a
+  `EN_REVISION` todo lo demás, el múltiplo incluido: quien paga dos meses de una vez cae en la
+  bandeja. `reservarMeses()` existe en `src/storage/turso.ts` para repartir y no lo llama
+  nadie. Con efectivo no puede ocurrir, porque el cobrador marca meses y el total sale de la
+  cuota de cada uno.
+
+  Hay que decidir dos cosas antes de construirlo: si el múltiplo se reparte solo o se le
+  pregunta al residente, y qué pasa con un monto que no es múltiplo (devolver, dejar a cuenta,
+  o revisión como hoy).
 - Casas vacías o exoneradas.
 - Saldo inicial de cada casa. Es un dato, no una regla: la tabla `ajustes` y la importación en
   `/admin/saldos` ya existen y esperan los montos.
