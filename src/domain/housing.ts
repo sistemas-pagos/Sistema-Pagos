@@ -48,9 +48,14 @@ function primerAcierto(texto: string, patrones: readonly RegExp[]): string | und
  * `E1B4C18`, `e1b4c18`, `E1 B4 C18`, `Etapa1Bloque4Casa18` y, con letras,
  * `E1BAC18` (bloque A) o `E1B4C18B` (casa 18B).
  *
+ * El separador se admite **a los dos lados** de cada parte: `E1-B4-C18` es la
+ * forma que el sistema le muestra al residente por WhatsApp, y hasta ahora solo
+ * entraba de casualidad por el camino alterno —que no soporta letras, asi que
+ * `E1-BA-C18` quedaba afuera—. Lo que se ensena tiene que poder volver a entrar.
+ *
  * Es el formato que el sistema le pide al vecino, asi que es el que mas llega.
  */
-const COMPACT = /\b(?:ETAPA|E(?![A-Z]))\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*(?:BLOQUE|B)\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*(?:CASA|C)\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i;
+const COMPACT = /\b(?:ETAPA|E(?![A-Z]))\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*[:#.-]?\s*(?:BLOQUE|B)\s*[:#.-]?\s*([A-Z0-9]{1,4})\s*[:#.-]?\s*(?:CASA|C)\s*[:#.-]?\s*([A-Z0-9]{1,5})\b/i;
 
 const VALID_PART = /^[A-Z0-9]{1,5}$/;
 
@@ -114,6 +119,33 @@ export function sameHomeRef(a: HomeRef, b: HomeRef): boolean {
 /** El codigo compacto de la vivienda: E1B4C18. */
 export function homeCode(home: HomeRef): string {
   return `E${home.stage}B${home.block}C${home.house}`;
+}
+
+/**
+ * El mismo codigo, con guiones: `E1-B4-C18`.
+ *
+ * Es la forma que sale **por WhatsApp**. Pegado —`E1B4C18`— se lee como una
+ * matricula y hay que descifrarlo; con guiones se ven las tres partes de un
+ * vistazo, que es justo lo que el residente tiene que comparar con su casa.
+ *
+ * En las pantallas del panel y del cobrador se sigue usando `homeCode`: ahi el
+ * codigo es una etiqueta corta en una columna, no una frase que alguien lee en
+ * el telefono.
+ */
+export function homeCodeLegible(home: HomeRef): string {
+  return `E${home.stage}-B${home.block}-C${home.house}`;
+}
+
+/**
+ * Lo mismo, partiendo del codigo ya guardado.
+ *
+ * `viviendas.codigo` guarda la forma pegada y es clave de unicidad, asi que no
+ * se toca: se traduce al mostrarla. Si algun codigo no se puede partir, se
+ * devuelve tal cual —un recibo con el codigo raro es mejor que uno sin casa.
+ */
+export function codigoConGuiones(codigo: string): string {
+  const partes = parseHomeReference(codigo);
+  return partes ? homeCodeLegible(partes) : codigo;
 }
 
 export function homeLabel(home: HomeRef | undefined): string {
