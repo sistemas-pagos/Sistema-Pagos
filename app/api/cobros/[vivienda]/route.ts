@@ -27,13 +27,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ viv
   const store = await getPaymentStore();
   const [homes, pagos] = await Promise.all([store.listHomes(), store.listPayments()]);
   const home = homes.find((candidata) => candidata.id === viviendaId);
-  // Una casa inactiva no paga el servicio, asi que no se le cobra. La pantalla
-  // ya no ofrece el formulario, pero esto no sobra: el POST viaja por HTTP y
-  // puede llegar de una pestaña vieja o de una casa que se desactivo mientras
-  // el cobrador la tenia abierta.
-  if (!home || !home.active) return new NextResponse('Not found', { status: 404 });
+  if (!home) return new NextResponse('Not found', { status: 404 });
 
   const form = await request.formData();
+  const enRevision = form.get('enRevision') === '1';
+
+  // Una casa inactiva no paga el servicio, asi que no se le cobra un mes. Pero
+  // si el cobrador ya recibio la plata, se registra **en revision**: es la misma
+  // regla que para la casa que ya pago (fase 6). No anotarla dejaria dinero
+  // existiendo que el sistema no conoce, y ademas el admin tiene que enterarse
+  // —una casa inactiva que paga es justo la que hay que volver a activar.
+  //
+  // El POST viaja por HTTP: que la pantalla ofrezca un solo camino no alcanza.
+  if (!home.active && !enRevision) return new NextResponse('Not found', { status: 404 });
+
   const telefono = normalizeOptionalPhone(String(form.get('telefono') ?? ''));
   const aceptaWhatsapp = form.get('consiente') === 'on';
   const ahora = new Date();
@@ -49,7 +56,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ viv
   // La casa ya pago y el cobrador igual recibio la plata. Se registra sin tomar
   // el mes, sin recibo y sin avisarle al vecino: no anotarlo dejaria dinero
   // existiendo que el sistema no conoce, que es peor.
-  if (form.get('enRevision') === '1') {
+  if (enRevision) {
     const motivo = String(form.get('motivo') ?? '').trim();
     if (!motivo) return volver(request, viviendaId, '?error=Contá qué pasó antes de registrarlo.');
 
