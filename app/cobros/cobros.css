@@ -214,6 +214,23 @@ body:has(.cob) {
 .cob__chip--verificar { background: #14293d; color: #7fb6e8; }
 .cob__chip--revision { background: #34211f; color: #e89b8b; }
 
+/*
+ * La casa inactiva: gris, sin color de estado.
+ *
+ * Los demas chips dicen como viene el cobro de este mes. Este dice otra cosa
+ * —si la casa paga el servicio o no— y por eso no compite por el mismo color:
+ * apagado es justamente lo que significa.
+ */
+.cob__chip--inactiva { background: #22272a; color: #9aa6ab; }
+
+/* Los dos chips juntos, sin que la fila se parta en pantallas angostas. */
+.cob__estados {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
 .cob__nota {
   background: #10352a;
   border: 1px solid #1f5240;

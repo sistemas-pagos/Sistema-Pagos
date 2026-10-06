@@ -19,6 +19,15 @@ export interface FilaDeCobro {
   block: string;
   house: string;
   estado: EstadoDeCasa;
+  /**
+   * Si la casa paga el servicio.
+   *
+   * Una casa inactiva —vacia, exonerada, o simplemente una que no paga— no
+   * debe el mes, pero **aparece igual en la lista**: el cobrador tiene que
+   * poder verla para saber que existe y que no le toca tocar esa puerta, y
+   * para que se puedan contar.
+   */
+  activa: boolean;
   /** `EFECTIVO`, `TRANSFERENCIA` o undefined si todavia no pago. */
   metodo?: PaymentRecord['method'];
   /** Ultimos digitos, para el vecino que dice «ya pagué, aquí está mi número». */
@@ -31,6 +40,8 @@ export interface FiltrosDeCobro {
   block?: string;
   house?: string;
   estado?: EstadoDeCasa;
+  /** `true` solo activas, `false` solo inactivas, `undefined` todas. */
+  activa?: boolean;
   metodo?: PaymentRecord['method'];
   /** Lo unico que se escribe. Busca por referencia o por numero de recibo. */
   busqueda?: string;
@@ -72,8 +83,13 @@ export function filasDeCobro(
   // contradecian: la lista decia que la casa debia septiembre y al entrar solo
   // se podia cobrar octubre. El cobrador le tocaba la puerta por un mes que esa
   // casa nunca debio.
+  //
+  // Las **inactivas si aparecen**. Antes se filtraban aqui y desaparecian de
+  // todo, asi que una casa vacia no se podia ni ver ni contar: la unica forma
+  // de saber que existia era que alguien se acordara. Aparecen marcadas, y el
+  // filtro de arriba deja verlas solas o esconderlas.
   const filas = homes
-    .filter((home) => home.active && periodo >= firstBillablePeriod(home))
+    .filter((home) => periodo >= firstBillablePeriod(home))
     .map((home): FilaDeCobro => {
       const suyos = delMes.filter(
         (pago) => pago.stage === home.stage && pago.block === home.block && pago.house === home.house,
@@ -86,6 +102,7 @@ export function filasDeCobro(
         block: home.block,
         house: home.house,
         estado: 'PENDIENTE',
+        activa: home.active,
       };
 
       for (const pago of suyos) {
@@ -114,6 +131,7 @@ function aplicarFiltros(filas: readonly FilaDeCobro[], filtros: FiltrosDeCobro):
     if (filtros.block && fila.block !== filtros.block) return false;
     if (filtros.house && fila.house !== filtros.house) return false;
     if (filtros.estado && fila.estado !== filtros.estado) return false;
+    if (filtros.activa !== undefined && fila.activa !== filtros.activa) return false;
     if (filtros.metodo && fila.metodo !== filtros.metodo) return false;
 
     // La referencia se busca **por el final**: el vecino lee los ultimos
@@ -131,18 +149,22 @@ function aplicarFiltros(filas: readonly FilaDeCobro[], filtros: FiltrosDeCobro):
   });
 }
 
-/** Las opciones de cada lista desplegable, sacadas del padron real. */
+/**
+ * Las opciones de cada lista desplegable, sacadas del padron entero.
+ *
+ * Incluye las inactivas a proposito: si el bloque de una casa vacia no esta en
+ * la lista, no hay forma de llegar hasta ella para verla.
+ */
 export function opcionesDeFiltro(homes: readonly HomeRecord[]): {
   etapas: string[];
   bloques: string[];
   casas: string[];
 } {
-  const activas = homes.filter((home) => home.active);
   const unicos = (valores: string[]) => [...new Set(valores)].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
 
   return {
-    etapas: unicos(activas.map((home) => home.stage)),
-    bloques: unicos(activas.map((home) => home.block)),
-    casas: unicos(activas.map((home) => home.house)),
+    etapas: unicos(homes.map((home) => home.stage)),
+    bloques: unicos(homes.map((home) => home.block)),
+    casas: unicos(homes.map((home) => home.house)),
   };
 }

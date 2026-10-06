@@ -43,6 +43,7 @@ describe('la fila que ve el cobrador', () => {
       block: '2',
       house: '14',
       estado: 'PAGADO',
+      activa: true,
       metodo: 'TRANSFERENCIA',
       referencia: '412000004821',
       fechaPago: '2026-10-02',
@@ -59,8 +60,17 @@ describe('la fila que ve el cobrador', () => {
     expect(fila.metodo).toBeUndefined();
   });
 
-  it('una casa dada de baja no aparece', () => {
-    expect(filasDeCobro([casa({ active: false })], [], HOY)).toEqual([]);
+  /**
+   * Invertida el 6 de octubre de 2026, por decision de Eduardo.
+   *
+   * Antes una casa inactiva no aparecia, y esta prueba lo fijaba. El problema
+   * es que desaparecia de todo: no habia forma de verla ni de contarla. Ahora
+   * aparece marcada, y el filtro decide si se muestra.
+   */
+  it('una casa inactiva aparece, marcada', () => {
+    const [fila] = filasDeCobro([casa({ active: false })], [], HOY);
+
+    expect(fila.activa).toBe(false);
   });
 
   it('el pago de otro mes no cuenta para este', () => {
@@ -138,9 +148,13 @@ describe('los filtros', () => {
     });
   });
 
-  it('una casa de baja no aporta opciones a las listas', () => {
-    const conBaja = [...padron, casa({ id: 'v4', stage: '9', block: '9', house: '9', active: false })];
-    expect(opcionesDeFiltro(conBaja).etapas).toEqual(['3', '4']);
+  /**
+   * Invertida con la anterior: si la etapa de una casa inactiva no esta en el
+   * desplegable, no hay camino para llegar a verla.
+   */
+  it('una casa inactiva si aporta opciones a las listas', () => {
+    const conInactiva = [...padron, casa({ id: 'v4', stage: '9', block: '9', house: '9', active: false })];
+    expect(opcionesDeFiltro(conInactiva).etapas).toEqual(['3', '4', '9']);
   });
 });
 
@@ -221,5 +235,61 @@ describe('una casa no aparece antes de su alta', () => {
   /** Un alta anterior al sistema no adelanta nada: antes de septiembre no hay meses. */
   it('un alta vieja no la hace aparecer antes de septiembre', () => {
     expect(filasDeCobro([casa({ startDate: '2024-03-01' })], [], '2026-08')).toHaveLength(0);
+  });
+});
+
+/**
+ * Las casas inactivas se ven, se filtran y se cuentan.
+ *
+ * Antes se filtraban en `filasDeCobro` y desaparecian de todo: una casa vacia
+ * no se podia ni ver ni contar, y la unica forma de saber que existia era que
+ * alguien se acordara. Eduardo las quiere a la vista, marcadas, con un filtro
+ * propio y contadas aparte.
+ *
+ * Una inactiva no paga el servicio: aparece para verse, no para cobrarse.
+ */
+describe('casas activas e inactivas', () => {
+  const activa = casa({ id: 'v-activa', house: '1' });
+  const inactiva = casa({ id: 'v-inactiva', house: '2', active: false });
+  const padron = [activa, inactiva];
+
+  it('la inactiva aparece en la lista', () => {
+    const filas = filasDeCobro(padron, [], HOY);
+
+    expect(filas).toHaveLength(2);
+    expect(filas.map((fila) => fila.activa).sort()).toEqual([false, true]);
+  });
+
+  it('se puede pedir solo las inactivas', () => {
+    const filas = filasDeCobro(padron, [], HOY, { activa: false });
+
+    expect(filas.map((fila) => fila.viviendaId)).toEqual(['v-inactiva']);
+  });
+
+  it('se puede pedir solo las activas', () => {
+    const filas = filasDeCobro(padron, [], HOY, { activa: true });
+
+    expect(filas.map((fila) => fila.viviendaId)).toEqual(['v-activa']);
+  });
+
+  /** Sin filtro vienen las dos: es lo que permite contarlas. */
+  it('sin filtro vienen las dos', () => {
+    expect(filasDeCobro(padron, [], HOY, {})).toHaveLength(2);
+  });
+
+  /** El bloque de una casa inactiva tiene que estar en el desplegable. */
+  it('los filtros ofrecen el bloque de una casa inactiva', () => {
+    const otroBloque = casa({ id: 'v-otra', block: '99', active: false });
+
+    expect(opcionesDeFiltro([activa, otroBloque]).bloques).toContain('99');
+  });
+
+  /** Una inactiva que pago en efectivo sigue contando como pagada. */
+  it('una inactiva con pago se ve pagada igual', () => {
+    const suPago = pago({ stage: inactiva.stage, block: inactiva.block, house: inactiva.house });
+    const [fila] = filasDeCobro([inactiva], [suPago], HOY);
+
+    expect(fila.activa).toBe(false);
+    expect(fila.estado).toBe('PAGADO');
   });
 });
