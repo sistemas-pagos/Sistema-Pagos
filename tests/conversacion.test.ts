@@ -48,7 +48,9 @@ describe('cuando el comprobante no dice la vivienda', () => {
     const resultado = await comprobanteSinVivienda(store);
 
     expect(resultado.status).toBe('ESPERANDO_RESPUESTA');
-    expect(resultado.reply).toContain('E1 B4 C18');
+    // El ejemplo cambio el 6 de octubre de 2026: ahora traduce de «etapa 3,
+    // bloque 1, casa 1» a `E3-B1-C1`, que es la regla y no solo el resultado.
+    expect(resultado.reply).toContain('E3-B1-C1');
     const contexto = await store.getPendingByPhone(TELEFONO);
     expect(contexto?.attempts).toBe(0);
   });
