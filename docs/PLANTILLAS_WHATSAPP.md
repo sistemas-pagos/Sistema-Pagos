@@ -32,6 +32,10 @@ Verificado: {{8}}
 Sin encabezado, sin pie y sin botones: cuantas menos partes tenga, menos motivos hay para
 que la rechacen.
 
+La vivienda va en `{{2}}` **con guiones** —`E1-B4-C18`— y no pegada. Es un parámetro, así que
+cambiar cómo se ve no obliga a volver a aprobar la plantilla: lo aprobado es el cuerpo.
+Todos los mensajes al residente están en [`docs/MENSAJES_WHATSAPP.md`](MENSAJES_WHATSAPP.md).
+
 ### Ejemplo para el formulario de Meta
 
 Meta pide valores de muestra para revisar la plantilla. Estos sirven y no son datos reales:
@@ -39,7 +43,7 @@ Meta pide valores de muestra para revisar la plantilla. Estos sirven y no son da
 | | Ejemplo |
 |---|---|
 | `{{1}}` | `REC-000012` |
-| `{{2}}` | `E1B4C18` |
+| `{{2}}` | `E1-B4-C18` |
 | `{{3}}` | `septiembre de 2026` |
 | `{{4}}` | `L150.00` |
 | `{{5}}` | `Transferencia` |

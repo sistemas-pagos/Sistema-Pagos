@@ -15,6 +15,7 @@
  * No imprime telefonos, E/B/C, montos ni referencias (invariante 12): solo
  * contadores y el numero de recibo, que no identifica a nadie por si solo.
  */
+import { codigoConGuiones } from '@/src/domain/housing';
 import { env } from '../src/config/env.ts';
 import { parametrosDePlantilla } from '../src/domain/recibo.ts';
 import { safeLog } from '../src/security/logging.ts';
@@ -48,7 +49,7 @@ async function main(): Promise<void> {
           envio.plantilla,
           parametrosDePlantilla({
             numero: envio.reciboNumero,
-            vivienda: envio.vivienda,
+            vivienda: codigoConGuiones(envio.vivienda),
             periodos: envio.periodos,
             montoCentavos: envio.montoCentavos,
             metodo: envio.metodo,
