@@ -15,6 +15,11 @@ export function receiptReviewReason(extraction: ReceiptExtraction): string | und
   const config = env();
   if (!extraction.amount || extraction.amount <= 0) return 'amount_missing';
 
+  // Monto exacto, sin repartir. La invariante 6 dice que un multiplo exacto se
+  // reparte entre los meses atrasados, pero eso no esta construido: quien paga
+  // dos meses de una vez cae en EN_REVISION como cualquier otro monto raro.
+  // `reservarMeses()` es el enganche que lo haria y hoy no lo llama nadie.
+  // Antes de construirlo hay que decidir la seccion 7 del plan.
   const amountDifference = extraction.amount - config.EXPECTED_PAYMENT_AMOUNT;
   if (Math.abs(amountDifference) > 0.005) {
     return amountDifference < 0 ? 'amount_below_expected' : 'amount_above_expected';

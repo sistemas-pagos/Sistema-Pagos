@@ -44,7 +44,7 @@ export default async function HomePage() {
       </section>
 
       <div className="notice">
-        Un comprobante leído por OCR no demuestra que el dinero exista. El sistema separa <strong>comprobante recibido</strong> de <strong>pago verificado</strong>: una transferencia solo se da por pagada cuando aparece en el <strong>extracto del banco</strong>, y cada movimiento verifica un solo pago. Un monto que es múltiplo exacto de la cuota se reparte entre los meses atrasados; cualquier otro queda en revisión.
+        Un comprobante leído por OCR no demuestra que el dinero exista. El sistema separa <strong>comprobante recibido</strong> de <strong>pago verificado</strong>: una transferencia solo se da por pagada cuando aparece en el <strong>extracto del banco</strong>, y cada movimiento verifica un solo pago. Hoy una transferencia tiene que ser por el monto exacto de la cuota: cualquier otro monto queda en revisión para que lo mire una persona.
       </div>
 
       <div className="section-head"><div><p className="eyebrow">Resumen mensual</p><h2>{periodLabel(snapshot.period)}</h2></div><p>Escenario demostrativo de 12 viviendas</p></div>
@@ -106,7 +106,7 @@ export default async function HomePage() {
       <section className="queues">
         <article className="queue"><h3>Sin identificar</h3><p>Si falta etapa, bloque o casa, WhatsApp solicita E1 B4 C18 sin repetir OCR.</p><strong>{snapshot.unidentified.length}</strong></article>
         <article className="queue"><h3>Duplicados</h3><p>El mismo archivo exacto no vuelve a sumar. Una referencia repetida pasa a revisión, no se descarta automáticamente.</p><strong>{snapshot.duplicates.length}</strong></article>
-        <article className="queue"><h3>En revisión</h3><p>Referencias repetidas, montos que no son múltiplo de la cuota, datos incompatibles o validación insuficiente.</p><strong>{snapshot.review.length}</strong></article>
+        <article className="queue"><h3>En revisión</h3><p>Referencias repetidas, montos distintos de la cuota, datos incompatibles o validación insuficiente.</p><strong>{snapshot.review.length}</strong></article>
       </section>
 
       <footer className="footer">
