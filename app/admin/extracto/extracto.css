@@ -1,0 +1,64 @@
+/*
+ * Lo poco que esta pantalla agrega a la del cobrador: filas de «etiqueta a la
+ * izquierda, numero a la derecha» y el selector de archivo.
+ */
+
+.ext__linea {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--linea);
+  font-size: .95rem;
+}
+
+.ext__linea:last-of-type { border-bottom: 0; }
+.ext__linea span { color: var(--apagado); }
+.ext__linea strong { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* La linea que decide: es la unica que cambia pagos de estado. */
+.ext__linea--fuerte strong { color: var(--menta); font-size: 1.1rem; }
+
+.ext__carga {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/*
+ * El selector de archivo nativo es una zona tocable de 20 px en algunos
+ * telefonos. Se le da alto y borde para que se vea como lo que es: el boton
+ * que abre los archivos del telefono.
+ */
+.ext__carga input[type='file'] {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px;
+  border: 1px dashed var(--borde);
+  border-radius: 12px;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: inherit;
+  font-size: .95rem;
+}
+
+.ext__titulo {
+  margin: 4px 0 12px;
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+/*
+ * Uno encima del otro y los dos del mismo ancho.
+ *
+ * En fila el primario dice lo que va a hacer —«verificar 3 pagos»— y esa frase
+ * no entra al lado de nada en un telefono.
+ */
+.ext__acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}

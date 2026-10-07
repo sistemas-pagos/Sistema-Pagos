@@ -29,9 +29,10 @@ GitHub Actions ─► procesar-comprobantes ─► Turso ─► enviar-recibos �
 pesado —OCR, conciliación, envíos— corre en GitHub Actions, donde un proceso puede tardar
 minutos sin que nadie espere una respuesta HTTP.
 
-El efectivo y el extracto del banco entran por otros dos caminos: el cobrador registra el cobro
-en el panel desde su teléfono, y el tesorero manda el CSV del banco por WhatsApp desde un número
-autorizado.
+El efectivo y el extracto del banco entran por el panel, los dos desde el teléfono: el cobrador
+registra el cobro en `/cobros`, y el tesorero carga el CSV del banco en `/admin/extracto`. El
+extracto también se acepta por WhatsApp desde un número autorizado, pero el panel es el camino
+recomendado — el archivo del banco trae todos los movimientos de la cuenta.
 
 ## Las reglas que manda el plan
 
@@ -69,10 +70,11 @@ validación de MIME, magic bytes y tamaño antes del OCR, y descarte del reinten
 server-side: el comprobante no se le manda a ningún proveedor de IA. Parser de BAC para banco,
 depositante, fecha, hora, monto, detalle, referencia, beneficiario y cuenta destino.
 
-**Verificación contra el banco.** El tesorero manda el CSV del extracto por WhatsApp desde un
-número que está en `usuarios` con rol ADMIN o TESORERO. El sistema importa los movimientos sin
-duplicarlos, manda un resumen y aplica al recibir la confirmación, que expira. Un movimiento
-verifica un solo pago, y lo garantiza una restricción UNIQUE.
+**Verificación contra el banco.** El tesorero carga el CSV del extracto en `/admin/extracto`, o
+lo manda por WhatsApp desde un número que está en `usuarios` con rol ADMIN o TESORERO. Los dos
+caminos corren el mismo código: importa los movimientos sin duplicarlos, muestra un resumen y
+aplica solo al confirmar, y la confirmación expira. Un movimiento verifica un solo pago, y lo
+garantiza una restricción UNIQUE.
 
 **Efectivo.** El cobrador entra a `/cobros` desde su teléfono, busca la casa con filtros de
 etapa, bloque, casa, estado, método y mes, y marca los meses que paga: **el monto no se

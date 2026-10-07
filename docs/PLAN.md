@@ -16,7 +16,11 @@ Este documento reemplaza las decisiones anteriores cuando haya conflicto. Implem
 - **El cobro en efectivo se registra en el panel**, desde el teléfono del cobrador. Antes decía Google Form; se cambió porque registrarlo en el panel elimina la cuenta de servicio de Google, el workflow `procesar-efectivo` y la sincronización de una hoja de respuestas, para el mismo resultado.
 - **GitHub Actions** hace el trabajo pesado. **Vercel** solo aloja el webhook mínimo y el panel.
 - **Sin Apps Script.**
-- La verificación de transferencias se hace enviando el **CSV del banco por WhatsApp** desde un número autorizado.
+- La verificación de transferencias se hace contra el **CSV del banco**. El tesorero lo carga en
+  **`/admin/extracto`, desde el teléfono**, y también puede mandarlo por WhatsApp desde un número
+  autorizado. Los dos caminos llaman al mismo código. El del panel es el recomendado: el extracto
+  trae *todos* los movimientos de la cuenta, y mandarlo por WhatsApp es entregárselo a Meta para
+  verificar unos pagos.
 - Cada pago verificado recibe un **número de recibo único** y se notifica al vecino por WhatsApp.
 - **Fecha límite de pago: el último día del mes de servicio.** El mes M vence el último día de M y la vivienda queda morosa por M desde el día 1 de M+1. Se usa el último día y no el 30 para que no haya casos raros: en febrero no existe el 30, y en los meses de 31 días el 31 quedaría fuera de plazo por un día.
 - **Mes de ajuste de base: septiembre 2026.** Es el primer mes de servicio del sistema; quien no pague septiembre queda moroso. La deuda anterior a septiembre no se carga como meses ni como pagos: entra una sola vez como `ajustes` de tipo `SALDO_INICIAL` (fase 3).
@@ -36,7 +40,10 @@ Vecino ──WhatsApp──► Vercel /api/whatsapp/webhook
 Cobrador ──teléfono──► /cobros (panel)
                        registra el efectivo, emite recibo y pide el envío
 
-Tesorero ──WhatsApp──► el CSV del banco entra como un mensaje más
+Tesorero ──teléfono──► /admin/extracto (panel)
+                       lee el archivo, muestra el resumen y aplica al confirmar
+
+           ──WhatsApp──► el mismo CSV entra como un mensaje más
                        y lo concilia procesar-comprobantes
 
 GitHub Actions ─► procesar-comprobantes ─► Turso ─► enviar-recibos ─► WhatsApp
@@ -47,6 +54,11 @@ GitHub Actions ─► procesar-comprobantes ─► Turso ─► enviar-recibos �
 extracto del tesorero entran por el mismo webhook y salen de la misma cola, así que
 `procesar-comprobantes` los atiende a los dos. Un workflow aparte solo para el CSV tendría
 que leer la misma cola, con su propio `concurrency`, para hacer lo mismo.
+
+**Dos puertas, una sola lógica.** El extracto cargado en el panel y el mandado por WhatsApp
+llaman a las mismas funciones de `src/services/conciliacion.ts`. Lo único distinto es cómo se
+confirma: un botón con el resumen a la vista, o un «SI» que vence. Tener dos lógicas según por
+qué puerta entró el archivo es como aparecen dos verdades en algo que verifica plata.
 
 El efectivo no pasa por Actions: el cobrador está en la puerta y el número de recibo lo
 necesita en el momento.
@@ -257,7 +269,7 @@ Lo que existe hoy en `.github/workflows/`:
 | `ci` | cada PR y push a `main` | lint, typecheck, test y build |
 | `migraciones` | manual | Aplica migraciones pendientes |
 | `usuarios` | manual | Sincroniza el número autorizado y fija credenciales |
-| `procesar-comprobantes` | `repository_dispatch` + cron `*/10` | Descarga, OCR, parser, guarda, responde. **También concilia el CSV del banco**, porque llega por el mismo webhook |
+| `procesar-comprobantes` | `repository_dispatch` + cron `*/10` | Descarga, OCR, parser, guarda, responde. **También concilia el CSV del banco** cuando llega por WhatsApp; el cargado en el panel no pasa por Actions |
 | `enviar-recibos` | `repository_dispatch` + al terminar `procesar-comprobantes` + cron `*/15` | Envía plantillas y reintenta fallidos |
 | `mantenimiento` | cron diario 07:30 UTC | Expira contextos y confirmaciones de CSV |
 | `cierre-mes` | manual, con el período como input | Cuadra y bloquea el mes |
@@ -267,8 +279,10 @@ nada que el existente no hiciera ya:
 
 - **`procesar-efectivo` no existe.** El cobro en efectivo se registra en el panel (sección 1),
   así que no hay hoja de respuestas que leer.
-- **`conciliar-csv` no existe como workflow aparte.** El CSV entra como un mensaje de WhatsApp
-  y lo atiende `procesar-comprobantes`, que ya lee esa cola.
+- **`conciliar-csv` no existe como workflow aparte.** Por WhatsApp el CSV entra como un mensaje
+  más y lo atiende `procesar-comprobantes`, que ya lee esa cola. Cargado en el panel no toca
+  Actions: el tesorero está mirando la pantalla y el resumen lo necesita en el momento, igual
+  que el cobrador con su recibo.
 
 **`sincronizar-sheets` no existe y no se va a construir.** El panel muestra hoy el dashboard,
 los pendientes, las excepciones, los recibos no entregados y los cierres, que era todo lo que

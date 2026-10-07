@@ -159,6 +159,12 @@ Tu comprobante está guardado: no hace falta que lo envíes de nuevo.
 
 Solo desde un número con rol **ADMIN** o **TESORERO**.
 
+**Este ya no es el camino recomendado.** El extracto se carga en `/admin/extracto`, desde el
+teléfono: el archivo del banco trae *todos* los movimientos de la cuenta, y mandarlo por
+WhatsApp es entregárselo a Meta para verificar unos pagos. El camino de abajo sigue existiendo
+y corre el mismo código; lo que cambia es cómo se confirma —un botón con el resumen a la vista
+en vez de un «SI» que vence.
+
 Llega un resumen y luego:
 
 ```

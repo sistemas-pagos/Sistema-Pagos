@@ -5,6 +5,17 @@ Una transferencia se verifica **solo** contra un movimiento del extracto del ban
 extracto dice lo que el banco recibió. Este documento describe el archivo que el BAC deja
 descargar y las comprobaciones que hace `src/bank/bac-csv.ts` antes de creerle.
 
+## Por dónde entra
+
+El tesorero lo carga en **`/admin/extracto`**, desde el teléfono. Leerlo no verifica nada: la
+pantalla muestra el resumen —cuántos pagos se verificarían, cuánto entró que nadie reclama— y
+recién al confirmar se aplica.
+
+También se acepta por WhatsApp, desde un número con rol ADMIN o TESORERO, donde se confirma
+respondiendo `SI`. Es el camino viejo y no el recomendado: el archivo trae todos los
+movimientos de la cuenta y por WhatsApp pasa por Meta. Los dos llaman a las mismas funciones de
+`src/services/conciliacion.ts`.
+
 ## No es un CSV de una tabla: son tres
 
 | Sección | Columnas | Qué trae |
