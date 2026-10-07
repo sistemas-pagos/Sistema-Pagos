@@ -151,6 +151,24 @@ describe('la pantalla sabe decir todo lo que puede pasar', () => {
     expect(ruta).toContain("form.get('archivo')");
   });
 
+  /**
+   * Un recibo emitido y nadie que lo mande.
+   *
+   * `enviar-recibos` arranca por `repository_dispatch`, al terminar
+   * `procesar-comprobantes`, o por cron. Desde el panel no corre ningun
+   * workflow: sin el aviso explicito el recibo espera al cron, que en este
+   * repositorio promedia casi cinco horas, mientras la pantalla ya dice
+   * «aplicado». Lo mismo vale para cualquier ruta que emita recibos.
+   */
+  it.each([
+    ['el extracto', 'app/api/admin/extracto/route.ts'],
+    ['el cobro en efectivo', 'app/api/cobros/[vivienda]/route.ts'],
+  ])('%s pide el envio en el momento', (_nombre, archivo) => {
+    const fuente = readFileSync(new URL(`../${archivo}`, import.meta.url), 'utf8');
+
+    expect(fuente).toContain('requestReceiptSending');
+  });
+
   /** Verificar pagos no puede quedar detras de una sesion con el rol viejo. */
   it('la ruta vuelve a leer el rol de la base', () => {
     expect(ruta).toContain('usuarioPorId');

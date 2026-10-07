@@ -10,6 +10,7 @@ import {
 import { getPaymentStore } from '@/src/storage';
 import { getTursoClient } from '@/src/storage/turso-client';
 import { puedeConciliar, usuarioPorId } from '@/src/storage/usuarios';
+import { requestReceiptSending } from '@/src/whatsapp/dispatch';
 
 /**
  * El extracto del banco, cargado desde el panel.
@@ -56,7 +57,16 @@ export async function POST(request: Request) {
   const accion = String(form.get('accion') ?? '');
   const store = await getPaymentStore();
 
-  if (accion === 'confirmar') return volver(request, avisoDe(await confirmarExtracto({ db, store }, usuario)));
+  if (accion === 'confirmar') {
+    const resultado = await confirmarExtracto({ db, store }, usuario);
+    // Los recibos quedan en `envios` como PENDIENTE y los manda `enviar-recibos`.
+    // Por WhatsApp ese workflow arranca solo al terminar `procesar-comprobantes`;
+    // desde el panel no corre ningun workflow, asi que sin este aviso el recibo
+    // esperaria al cron —que promedia casi cinco horas (`src/storage/envios.ts`)—
+    // mientras el tesorero mira una pantalla que ya dice «aplicado».
+    if (resultado.tipo === 'aplicada' && resultado.recibos > 0) await requestReceiptSending();
+    return volver(request, avisoDe(resultado));
+  }
   if (accion === 'descartar') return volver(request, avisoDe(await descartarExtracto({ db, store }, usuario)));
 
   const archivo = form.get('archivo');
