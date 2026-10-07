@@ -9,6 +9,7 @@ import { buildHouseHistoryGrid, type HousePeriodState } from '@/src/services/hou
 import { puedeMarcarseSinRespaldo, puedeRechazarse } from '@/src/services/acciones-panel';
 import { canManuallyVerify } from '@/src/services/manual-verification';
 import { getPaymentStore } from '@/src/storage';
+import { Tabla } from '@/app/tabla';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +99,7 @@ export default async function AdminPage({
 
       <div className="section-head">
         <div><h2>{periodLabel(period)}</h2><p>Datos operativos privados · las imágenes de comprobantes se procesan temporalmente y no se conservan.</p></div>
-        <form method="get" action="/admin" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end' }}>
+        <form className="filtros-panel" method="get" action="/admin" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end' }}>
           <label htmlFor="period" style={filterLabelStyle}>Mes
             <input id="period" name="period" type="month" defaultValue={period} style={filterControlStyle} />
           </label>
@@ -148,170 +149,143 @@ export default async function AdminPage({
         <div><p className="eyebrow">Estado mensual</p><h2>Casa por casa</h2></div>
         <p>{monthlyRows.length} viviendas en el filtro · esta vista se deriva de Viviendas + Pagos y no se edita manualmente.</p>
       </div>
-      <div className="table-wrap monthly-status-table">
-        <table>
-          <thead><tr><th>Etapa</th><th>Bloque</th><th>Casa</th><th>Cuota</th><th>Estado</th><th>Monto recibido</th><th>Comprobantes</th><th>Fecha depósito</th></tr></thead>
-          <tbody>
-            {monthlyRows.length === 0 && <tr><td colSpan={8}>No hay viviendas para el filtro seleccionado.</td></tr>}
-            {monthlyRows.map((row) => (
-              <tr key={`${row.period}-${row.homeId}`}>
-                <td>{row.stage}</td>
-                <td>{row.block}</td>
-                <td><Link className="admin-link" href={`/admin/homes/${row.stage}/${row.block}/${row.house}`}>C{row.house}</Link></td>
-                <td>{money(row.monthlyFee)}</td>
-                <td><span className={`status-chip status-chip--${MONTHLY_STATE_CLASS[row.status]}`}>{MONTHLY_STATE_LABEL[row.status]}</span></td>
-                <td>{row.receivedAmount > 0 ? money(row.receivedAmount) : '—'}</td>
-                <td>{row.paymentCount || '—'}</td>
-                <td>{row.paymentDate ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Tabla columnas={['Etapa', 'Bloque', 'Casa', 'Cuota', 'Estado', 'Monto recibido', 'Comprobantes', 'Fecha depósito']} className="monthly-status-table">
+        {monthlyRows.length === 0 && <tr><td colSpan={8}>No hay viviendas para el filtro seleccionado.</td></tr>}
+        {monthlyRows.map((row) => (
+          <tr key={`${row.period}-${row.homeId}`}>
+            <td>{row.stage}</td>
+            <td>{row.block}</td>
+            <td><Link className="admin-link" href={`/admin/homes/${row.stage}/${row.block}/${row.house}`}>C{row.house}</Link></td>
+            <td>{money(row.monthlyFee)}</td>
+            <td><span className={`status-chip status-chip--${MONTHLY_STATE_CLASS[row.status]}`}>{MONTHLY_STATE_LABEL[row.status]}</span></td>
+            <td>{row.receivedAmount > 0 ? money(row.receivedAmount) : '—'}</td>
+            <td>{row.paymentCount || '—'}</td>
+            <td>{row.paymentDate ?? '—'}</td>
+          </tr>
+        ))}
+      </Tabla>
 
       <div className="section-head">
         <div><p className="eyebrow">Por vivienda</p><h2>Historial de los últimos 4 períodos</h2></div>
         <p>La vivienda se identifica exclusivamente por Etapa + Bloque + Casa.</p>
       </div>
-      <div className="table-wrap house-history-table">
-        <table>
-          <thead><tr><th>Vivienda</th>{houseGrid.periods.map((item) => <th key={item}>{periodLabel(item)}</th>)}</tr></thead>
-          <tbody>
-            {houseGrid.rows.map((row) => (
-              <tr key={row.home.id}>
-                <td><Link className="admin-link" href={`/admin/homes/${row.home.stage}/${row.home.block}/${row.home.house}`}>E{row.home.stage} · B{row.home.block} · C{row.home.house}</Link></td>
-                {row.periods.map((cell) => (
-                  <td key={cell.period}>
-                    <span className={`status-chip status-chip--${cell.state.toLowerCase()}`}>{HOUSE_STATE_LABEL[cell.state]}</span>
-                    {cell.amount != null && <small className="status-amount">{money(cell.amount)}</small>}
-                  </td>
-                ))}
-              </tr>
+      <Tabla
+        columnas={['Vivienda', ...houseGrid.periods.map((item) => periodLabel(item))]}
+        className="house-history-table"
+      >
+        {houseGrid.rows.map((row) => (
+          <tr key={row.home.id}>
+            <td><Link className="admin-link" href={`/admin/homes/${row.home.stage}/${row.home.block}/${row.home.house}`}>E{row.home.stage} · B{row.home.block} · C{row.home.house}</Link></td>
+            {row.periods.map((cell) => (
+              <td key={cell.period}>
+                <span className={`status-chip status-chip--${cell.state.toLowerCase()}`}>{HOUSE_STATE_LABEL[cell.state]}</span>
+                {cell.amount != null && <small className="status-amount">{money(cell.amount)}</small>}
+              </td>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </tr>
+        ))}
+      </Tabla>
 
       <div className="section-head"><div><p className="eyebrow">Sin identificar</p><h2>Asignación de vivienda</h2></div><p>Si falta etapa, bloque o casa, se piden los tres por WhatsApp. Esta asignación no repite OCR.</p></div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Fecha depósito</th><th>Depositante</th><th>Teléfono WhatsApp</th><th>Monto</th><th>Referencia</th><th>Asignar E/B/C</th></tr></thead>
-          <tbody>
-            {snapshot.unidentified.length === 0 && <tr><td colSpan={6}>No hay comprobantes sin identificar para este período.</td></tr>}
-            {snapshot.unidentified.map((payment) => (
-              <tr key={payment.id}>
-                <td>{payment.transactionDate ?? '—'}</td><td>{payment.depositor ?? '—'}</td><td>{payment.phone}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td>
-                <td>
-                  <form method="post" action={`/api/admin/payments/${payment.id}`}>
-                    <input type="hidden" name="action" value="assign-home" />
-                    <input type="hidden" name="period" value={period} />
-                    <input aria-label="Etapa" name="stage" inputMode="numeric" placeholder="Etapa" required style={{ width: 70 }} />{' '}
-                    <input aria-label="Bloque" name="block" inputMode="numeric" placeholder="Bloque" required style={{ width: 70 }} />{' '}
-                    <input aria-label="Casa" name="house" inputMode="numeric" placeholder="Casa" required style={{ width: 70 }} />{' '}
-                    <button className="primary-button" type="submit">Asignar</button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Tabla columnas={['Fecha depósito', 'Depositante', 'Teléfono WhatsApp', 'Monto', 'Referencia', 'Asignar E/B/C']}>
+        {snapshot.unidentified.length === 0 && <tr><td colSpan={6}>No hay comprobantes sin identificar para este período.</td></tr>}
+        {snapshot.unidentified.map((payment) => (
+          <tr key={payment.id}>
+            <td>{payment.transactionDate ?? '—'}</td><td>{payment.depositor ?? '—'}</td><td>{payment.phone}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td>
+            <td>
+              <form method="post" action={`/api/admin/payments/${payment.id}`}>
+                <input type="hidden" name="action" value="assign-home" />
+                <input type="hidden" name="period" value={period} />
+                <input aria-label="Etapa" name="stage" inputMode="numeric" placeholder="Etapa" required style={{ width: 70 }} />{' '}
+                <input aria-label="Bloque" name="block" inputMode="numeric" placeholder="Bloque" required style={{ width: 70 }} />{' '}
+                <input aria-label="Casa" name="house" inputMode="numeric" placeholder="Casa" required style={{ width: 70 }} />{' '}
+                <button className="primary-button" type="submit">Asignar</button>
+              </form>
+            </td>
+          </tr>
+        ))}
+      </Tabla>
 
       <div className="section-head"><div><p className="eyebrow">Pagos</p><h2>Historial del período</h2></div><p>Fecha depósito viene del comprobante; Mes pagado sigue el histórico desde agosto 2026.</p></div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Fecha depósito</th><th>Vivienda</th><th>Depositante</th><th>Teléfono WhatsApp</th><th>Banco</th><th>Cuota esperada</th><th>Monto depósito</th><th>Referencia</th><th>Estado</th><th>Mes pagado</th><th>Verificación</th></tr></thead>
-          <tbody>
-            {snapshot.payments.map((payment) => (
-              <tr key={payment.id}>
-                <td>{payment.transactionDate ?? '—'}</td><td>{payment.homeLabel}</td><td>{payment.depositor ?? '—'}</td><td>{payment.phone || '—'}</td><td>{payment.bank || '—'}</td><td>{payment.monthlyFee != null ? money(payment.monthlyFee) : '—'}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td><td>{payment.status.replaceAll('_', ' ')}</td>
-                <td>
-                  <form method="post" action={`/api/admin/payments/${payment.id}`}>
-                    <input type="hidden" name="action" value="set-period" />
-                    <input type="month" name="newPeriod" defaultValue={payment.period} required />{' '}
-                    <input type="hidden" name="period" value={period} />
-                    <button type="submit">Guardar</button>
-                  </form>
-                </td>
-                <td>
-                  {canManuallyVerify(payment) ? (
-                    <form method="post" action={`/api/admin/payments/${payment.id}`}>
-                      <input type="hidden" name="action" value="verify-manually" />
-                      <input type="hidden" name="period" value={period} />
-                      <button className="primary-button" type="submit">Verificar</button>
-                    </form>
-                  ) : payment.status === 'VERIFICADO' ? (
-                    <span>✅ Verificado{payment.verifiedAt ? ` · ${new Date(payment.verifiedAt).toLocaleDateString('es-HN')}` : ''}</span>
-                  ) : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Tabla columnas={['Fecha depósito', 'Vivienda', 'Depositante', 'Teléfono WhatsApp', 'Banco', 'Cuota esperada', 'Monto depósito', 'Referencia', 'Estado', 'Mes pagado', 'Verificación']}>
+        {snapshot.payments.map((payment) => (
+          <tr key={payment.id}>
+            <td>{payment.transactionDate ?? '—'}</td><td>{payment.homeLabel}</td><td>{payment.depositor ?? '—'}</td><td>{payment.phone || '—'}</td><td>{payment.bank || '—'}</td><td>{payment.monthlyFee != null ? money(payment.monthlyFee) : '—'}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td><td>{payment.status.replaceAll('_', ' ')}</td>
+            <td>
+              <form method="post" action={`/api/admin/payments/${payment.id}`}>
+                <input type="hidden" name="action" value="set-period" />
+                <input type="month" name="newPeriod" defaultValue={payment.period} required />{' '}
+                <input type="hidden" name="period" value={period} />
+                <button type="submit">Guardar</button>
+              </form>
+            </td>
+            <td>
+              {canManuallyVerify(payment) ? (
+                <form method="post" action={`/api/admin/payments/${payment.id}`}>
+                  <input type="hidden" name="action" value="verify-manually" />
+                  <input type="hidden" name="period" value={period} />
+                  <button className="primary-button" type="submit">Verificar</button>
+                </form>
+              ) : payment.status === 'VERIFICADO' ? (
+                <span>✅ Verificado{payment.verifiedAt ? ` · ${new Date(payment.verifiedAt).toLocaleDateString('es-HN')}` : ''}</span>
+              ) : '—'}
+            </td>
+          </tr>
+        ))}
+      </Tabla>
 
       <div className="section-head"><div><p className="eyebrow">Duplicados confirmados</p><h2>Comprobantes repetidos</h2></div><p>Sólo se marcan automáticamente por reintento técnico o archivo idéntico; una referencia repetida por sí sola no es duplicado.</p></div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Fecha</th><th>Vivienda</th><th>Teléfono WhatsApp</th><th>Monto</th><th>Referencia</th><th>Motivo</th><th>Original relacionado</th></tr></thead>
-          <tbody>
-            {snapshot.duplicates.length === 0 && <tr><td colSpan={7}>No hay duplicados confirmados en este período.</td></tr>}
-            {snapshot.duplicates.map((payment) => (
-              <tr key={payment.id}>
-                <td>{payment.transactionDate ?? '—'}</td><td>{payment.homeLabel}</td><td>{payment.phone || '—'}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td>
-                <td>{DUPLICATE_REASON_LABEL[payment.duplicateReason ?? ''] ?? payment.duplicateReason ?? 'Coincidencia detectada'}</td><td>{payment.duplicateOf ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Tabla columnas={['Fecha', 'Vivienda', 'Teléfono WhatsApp', 'Monto', 'Referencia', 'Motivo', 'Original relacionado']}>
+        {snapshot.duplicates.length === 0 && <tr><td colSpan={7}>No hay duplicados confirmados en este período.</td></tr>}
+        {snapshot.duplicates.map((payment) => (
+          <tr key={payment.id}>
+            <td>{payment.transactionDate ?? '—'}</td><td>{payment.homeLabel}</td><td>{payment.phone || '—'}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td>
+            <td>{DUPLICATE_REASON_LABEL[payment.duplicateReason ?? ''] ?? payment.duplicateReason ?? 'Coincidencia detectada'}</td><td>{payment.duplicateOf ?? '—'}</td>
+          </tr>
+        ))}
+      </Tabla>
 
       <div className="section-head"><div><p className="eyebrow">Revisión humana</p><h2>Casos que requieren decisión</h2></div><p>El encargado compara los datos extraídos con el movimiento bancario. La referencia es una señal, no una prueba única. Un monto distinto de L150 permanece en revisión.</p></div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Fecha</th><th>Vivienda</th><th>Teléfono WhatsApp</th><th>Banco</th><th>Cuota</th><th>Monto</th><th>Referencia</th><th>Motivo</th><th>Acciones</th></tr></thead>
-          <tbody>
-            {snapshot.review.length === 0 && <tr><td colSpan={9}>No hay casos en revisión para este período.</td></tr>}
-            {snapshot.review.map((payment) => (
-              <tr key={payment.id}>
-                <td>{payment.transactionDate ?? '—'}</td><td>{payment.homeLabel}</td><td>{payment.phone || '—'}</td><td>{payment.bank || '—'}</td><td>{payment.monthlyFee != null ? money(payment.monthlyFee) : '—'}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td>
-                <td>{DUPLICATE_REASON_LABEL[payment.reviewReason ?? ''] ?? payment.reviewReason ?? 'Revisión pendiente'}</td>
-                <td>
-                  {canManuallyVerify(payment, true) && (
-                    <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
-                      <input type="hidden" name="action" value="verify-reviewed" /><input type="hidden" name="period" value={period} />
-                      <button className="primary-button" type="submit">Verifiqué en banco</button>{' '}
-                    </form>
-                  )}
-                  {(payment.reviewReason === 'amount_below_expected' || payment.reviewReason === 'amount_above_expected') && <span>⚠ Revisar monto{' '}</span>}
-                  {payment.duplicateOf && (
-                    <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
-                      <input type="hidden" name="action" value="mark-duplicate" /><input type="hidden" name="period" value={period} />
-                      <button type="submit">Marcar duplicado</button>{' '}
-                    </form>
-                  )}
-                  {/* Sin estas dos, un pago que no se puede verificar no tiene
-                      salida: se queda en revision para siempre ocupando el mes
-                      de esa vivienda (H9). */}
-                  {puedeMarcarseSinRespaldo(payment) && (
-                    <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
-                      <input type="hidden" name="action" value="mark-not-found" /><input type="hidden" name="period" value={period} />
-                      <button type="submit" title="El banco todavía no respalda este comprobante. Vuelve a mirarse con el próximo extracto.">Sin respaldo del banco</button>{' '}
-                    </form>
-                  )}
-                  {puedeRechazarse(payment) && (
-                    <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
-                      <input type="hidden" name="action" value="reject" /><input type="hidden" name="period" value={period} />
-                      <input name="reason" placeholder="Motivo del rechazo" required maxLength={200} />{' '}
-                      <button type="submit" title="Cierra el caso y libera el mes de esa vivienda.">Rechazar</button>
-                    </form>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Tabla columnas={['Fecha', 'Vivienda', 'Teléfono WhatsApp', 'Banco', 'Cuota', 'Monto', 'Referencia', 'Motivo', 'Acciones']}>
+        {snapshot.review.length === 0 && <tr><td colSpan={9}>No hay casos en revisión para este período.</td></tr>}
+        {snapshot.review.map((payment) => (
+          <tr key={payment.id}>
+            <td>{payment.transactionDate ?? '—'}</td><td>{payment.homeLabel}</td><td>{payment.phone || '—'}</td><td>{payment.bank || '—'}</td><td>{payment.monthlyFee != null ? money(payment.monthlyFee) : '—'}</td><td>{money(payment.amount)}</td><td>{payment.reference ?? '—'}</td>
+            <td>{DUPLICATE_REASON_LABEL[payment.reviewReason ?? ''] ?? payment.reviewReason ?? 'Revisión pendiente'}</td>
+            <td>
+              {canManuallyVerify(payment, true) && (
+                <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
+                  <input type="hidden" name="action" value="verify-reviewed" /><input type="hidden" name="period" value={period} />
+                  <button className="primary-button" type="submit">Verifiqué en banco</button>{' '}
+                </form>
+              )}
+              {(payment.reviewReason === 'amount_below_expected' || payment.reviewReason === 'amount_above_expected') && <span>⚠ Revisar monto{' '}</span>}
+              {payment.duplicateOf && (
+                <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
+                  <input type="hidden" name="action" value="mark-duplicate" /><input type="hidden" name="period" value={period} />
+                  <button type="submit">Marcar duplicado</button>{' '}
+                </form>
+              )}
+              {/* Sin estas dos, un pago que no se puede verificar no tiene
+                  salida: se queda en revision para siempre ocupando el mes
+                  de esa vivienda (H9). */}
+              {puedeMarcarseSinRespaldo(payment) && (
+                <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
+                  <input type="hidden" name="action" value="mark-not-found" /><input type="hidden" name="period" value={period} />
+                  <button type="submit" title="El banco todavía no respalda este comprobante. Vuelve a mirarse con el próximo extracto.">Sin respaldo del banco</button>{' '}
+                </form>
+              )}
+              {puedeRechazarse(payment) && (
+                <form method="post" action={`/api/admin/payments/${payment.id}`} style={{ display: 'inline' }}>
+                  <input type="hidden" name="action" value="reject" /><input type="hidden" name="period" value={period} />
+                  <input name="reason" placeholder="Motivo del rechazo" required maxLength={200} />{' '}
+                  <button type="submit" title="Cierra el caso y libera el mes de esa vivienda.">Rechazar</button>
+                </form>
+              )}
+            </td>
+          </tr>
+        ))}
+      </Tabla>
 
       <div className="section-head"><div><p className="eyebrow">Excepciones</p><h2>Resumen operativo</h2></div></div>
       <section className="queues">

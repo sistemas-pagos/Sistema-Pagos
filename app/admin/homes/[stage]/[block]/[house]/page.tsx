@@ -6,6 +6,7 @@ import { periodLabel } from '@/src/domain/periods';
 import { getHouseHistory } from '@/src/services/house-history';
 import { getPaymentStore } from '@/src/storage';
 import { isValidHome, normalizeHomePart } from '@/src/domain/housing';
+import { Tabla } from '@/app/tabla';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,28 +52,23 @@ export default async function HousePage({ params }: { params: Promise<{ stage: s
         <div><p className="eyebrow">Historial</p><h2>Pagos y comprobantes</h2></div>
         <p>El teléfono es el remitente de WhatsApp y nunca identifica la vivienda. Pagada significa verificada. Las imágenes no se conservan.</p>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Mes pagado</th><th>Fecha depósito</th><th>Depositante</th><th>Teléfono WhatsApp</th><th>Cuota</th><th>Monto depósito</th><th>Banco</th><th>Referencia</th><th>Estado</th><th>Verificación</th></tr></thead>
-          <tbody>
-            {history.payments.length === 0 && <tr><td colSpan={10}>Esta vivienda todavía no tiene pagos registrados.</td></tr>}
-            {history.payments.map((payment) => (
-              <tr key={payment.id}>
-                <td>{periodLabel(payment.period)}</td>
-                <td>{payment.transactionDate ?? '—'}</td>
-                <td>{payment.depositor ?? '—'}</td>
-                <td>{payment.phone || '—'}</td>
-                <td>{money(homeRecord.monthlyFee)}</td>
-                <td>{money(payment.amount)}</td>
-                <td>{payment.bank}</td>
-                <td>{payment.reference ?? '—'}</td>
-                <td><span className={`status-chip status-chip--${payment.status.toLowerCase()}`}>{payment.status.replaceAll('_', ' ')}</span></td>
-                <td>{payment.verifiedAt ? `✅ ${new Date(payment.verifiedAt).toLocaleDateString('es-HN')}` : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Tabla columnas={['Mes pagado', 'Fecha depósito', 'Depositante', 'Teléfono WhatsApp', 'Cuota', 'Monto depósito', 'Banco', 'Referencia', 'Estado', 'Verificación']}>
+        {history.payments.length === 0 && <tr><td colSpan={10}>Esta vivienda todavía no tiene pagos registrados.</td></tr>}
+        {history.payments.map((payment) => (
+          <tr key={payment.id}>
+            <td>{periodLabel(payment.period)}</td>
+            <td>{payment.transactionDate ?? '—'}</td>
+            <td>{payment.depositor ?? '—'}</td>
+            <td>{payment.phone || '—'}</td>
+            <td>{money(homeRecord.monthlyFee)}</td>
+            <td>{money(payment.amount)}</td>
+            <td>{payment.bank}</td>
+            <td>{payment.reference ?? '—'}</td>
+            <td><span className={`status-chip status-chip--${payment.status.toLowerCase()}`}>{payment.status.replaceAll('_', ' ')}</span></td>
+            <td>{payment.verifiedAt ? `✅ ${new Date(payment.verifiedAt).toLocaleDateString('es-HN')}` : '—'}</td>
+          </tr>
+        ))}
+      </Tabla>
     </main>
   );
 }

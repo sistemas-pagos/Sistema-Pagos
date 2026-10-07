@@ -6,6 +6,7 @@ import { formatoRecibo } from '@/src/domain/recibo';
 import { UID_CLAVE_COMPARTIDA } from '@/src/auth/session';
 import { cajasPendientes, cobrosSinEntregar, type CajaPendiente } from '@/src/storage/cierre-caja';
 import { getTursoClient } from '@/src/storage/turso-client';
+import { Tabla } from '@/app/tabla';
 
 /**
  * Recibir la plata del cobrador.
@@ -94,29 +95,22 @@ export default async function CajaPage({ searchParams }: Params) {
             <div><p className="eyebrow">Sin entregar</p><h2>Quién lleva plata encima</h2></div>
             <p>Lo más viejo primero: lo que mide el riesgo del efectivo es el tiempo en la calle, no el monto.</p>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Cobrador</th><th>Cobros</th><th>Total</th><th>En revisión</th><th>Más viejo</th><th></th></tr>
-              </thead>
-              <tbody>
-                {cajas.map((caja) => (
-                  <tr key={caja.cobradorId}>
-                    <td>{caja.nombre}</td>
-                    <td>{caja.cobros}</td>
-                    <td>{money(caja.totalCentavos)}</td>
-                    <td>{caja.enRevisionCentavos > 0 ? money(caja.enRevisionCentavos) : '—'}</td>
-                    <td>{dias(caja.desde, ahora)} {dias(caja.desde, ahora) === 1 ? 'día' : 'días'}</td>
-                    <td>
-                      <Link href={`/admin/caja?cobrador=${encodeURIComponent(caja.cobradorId)}`}>
-                        {elegida?.cobradorId === caja.cobradorId ? 'Viendo' : 'Recibir'}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Tabla columnas={['Cobrador', 'Cobros', 'Total', 'En revisión', 'Más viejo', '']}>
+            {cajas.map((caja) => (
+              <tr key={caja.cobradorId}>
+                <td>{caja.nombre}</td>
+                <td>{caja.cobros}</td>
+                <td>{money(caja.totalCentavos)}</td>
+                <td>{caja.enRevisionCentavos > 0 ? money(caja.enRevisionCentavos) : '—'}</td>
+                <td>{dias(caja.desde, ahora)} {dias(caja.desde, ahora) === 1 ? 'día' : 'días'}</td>
+                <td>
+                  <Link href={`/admin/caja?cobrador=${encodeURIComponent(caja.cobradorId)}`}>
+                    {elegida?.cobradorId === caja.cobradorId ? 'Viendo' : 'Recibir'}
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </Tabla>
         </>
       )}
 
@@ -126,22 +120,17 @@ export default async function CajaPage({ searchParams }: Params) {
             <div><p className="eyebrow">Contar</p><h2>{elegida.nombre}</h2></div>
             <p>Compará línea por línea con el talonario del cobrador: el número de recibo es el mismo.</p>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Recibo</th><th>Vivienda</th><th>Fecha</th><th>Estado</th><th>Monto</th></tr></thead>
-              <tbody>
-                {detalle.map((cobro) => (
-                  <tr key={cobro.pagoId}>
-                    <td>{cobro.reciboNumero ? formatoRecibo(cobro.reciboNumero) : '—'}</td>
-                    <td>{cobro.vivienda}</td>
-                    <td>{cobro.fechaPago || '—'}</td>
-                    <td>{cobro.estado === 'EN_REVISION' ? '⚠ En revisión' : '✓ Cobrado'}</td>
-                    <td>{money(cobro.montoCentavos)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Tabla columnas={['Recibo', 'Vivienda', 'Fecha', 'Estado', 'Monto']}>
+            {detalle.map((cobro) => (
+              <tr key={cobro.pagoId}>
+                <td>{cobro.reciboNumero ? formatoRecibo(cobro.reciboNumero) : '—'}</td>
+                <td>{cobro.vivienda}</td>
+                <td>{cobro.fechaPago || '—'}</td>
+                <td>{cobro.estado === 'EN_REVISION' ? '⚠ En revisión' : '✓ Cobrado'}</td>
+                <td>{money(cobro.montoCentavos)}</td>
+              </tr>
+            ))}
+          </Tabla>
 
           {!sinPersona && <Recibir caja={elegida} />}
         </>

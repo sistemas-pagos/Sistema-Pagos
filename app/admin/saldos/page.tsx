@@ -6,6 +6,7 @@ import { compareHomes } from '@/src/domain/housing';
 import { getPaymentStore } from '@/src/storage';
 import { viviendasConSaldoInicial } from '@/src/storage/ajustes';
 import { getTursoClient } from '@/src/storage/turso-client';
+import { Tabla } from '@/app/tabla';
 
 /**
  * La carga del saldo inicial de cada vivienda (docs/PLAN.md, seccion 1).
@@ -94,19 +95,14 @@ export default async function SaldosPage({ searchParams }: { searchParams: Promi
             <div><p className="eyebrow">Pendientes</p><h2>Viviendas sin saldo inicial</h2></div>
             <p>Si una casa no debe nada de antes, no hace falta cargarla.</p>
           </div>
-          <div className="table-wrap homes-table">
-            <table>
-              <thead><tr><th>Vivienda</th><th>Responsable</th></tr></thead>
-              <tbody>
-                {faltan.map((home) => (
-                  <tr key={home.id}>
-                    <td>E{home.stage} · B{home.block} · C{home.house}</td>
-                    <td>{home.responsible ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Tabla columnas={['Vivienda', 'Responsable']} className="homes-table">
+            {faltan.map((home) => (
+              <tr key={home.id}>
+                <td>E{home.stage} · B{home.block} · C{home.house}</td>
+                <td>{home.responsible ?? '—'}</td>
+              </tr>
+            ))}
+          </Tabla>
         </>
       )}
     </main>

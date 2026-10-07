@@ -138,6 +138,29 @@ tbody tr:last-child td { border-bottom: 0; }
 .checkbox-cell { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .78rem; }
 .checkbox-cell input { width: auto; }
 
+.home-import-form { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+.home-import-form label { color: var(--muted); font-size: .8rem; }
+.home-import-form textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #07110f;
+  color: var(--text);
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .85rem;
+  line-height: 1.5;
+}
+.home-import-form p { margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.6; }
+.home-import-form .primary-button { justify-self: start; min-height: 44px; }
+
+/* El rotulo de cada campo de la fila editable: en escritorio lo da la cabecera. */
+.campo-fila { display: grid; gap: 4px; min-width: 0; }
+.campo-fila > span { display: none; color: var(--muted); font-size: .78rem; }
+.campo-fila input { width: 100%; }
+
 @media (max-width: 900px) {
   .hero, .workbench { grid-template-columns: 1fr; }
   .kpis { grid-template-columns: repeat(2, 1fr); }
@@ -154,4 +177,113 @@ tbody tr:last-child td { border-bottom: 0; }
   .admin-head { align-items: flex-start; flex-direction: column; }
   .home-form { grid-template-columns: 1fr; }
   h1 { font-size: 2.35rem; }
+}
+
+/*
+ * El panel en un telefono.
+ *
+ * Eduardo lo usa desde el telefono, igual que el cobrador. Nada se desbordaba
+ * —eso ya estaba—, pero la forma era de escritorio: los encabezados de seccion
+ * partidos en dos columnas de 150 px, y las tablas de hasta once columnas
+ * deslizandose de lado, con «Estado» siempre fuera de la pantalla.
+ */
+@media (max-width: 720px) {
+  /* El titulo arriba y la explicacion abajo, cada uno con el ancho entero. */
+  .section-head { flex-direction: column; align-items: stretch; gap: 8px; }
+
+  /*
+   * La fila deja de ser una fila y pasa a ser una tarjeta.
+   *
+   * La etiqueta de cada linea sale de `data-label`, que pone el componente
+   * `Tabla` con el nombre de la columna. Sin ese atributo la celda queda sin
+   * encabezado, que es justamente lo que una tabla deslizada de lado produce.
+   */
+  .table-wrap { overflow-x: visible; border: 0; border-radius: 0; background: none; }
+  .table-wrap table { min-width: 0; }
+
+  /* Fuera de la vista, no del arbol: el lector de pantalla sigue leyendola. */
+  .table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .table-wrap tbody tr {
+    display: block;
+    margin-bottom: 10px;
+    padding: 2px 15px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+
+  .table-wrap tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 11px 0;
+    text-align: right;
+  }
+
+  .table-wrap tbody td::before {
+    content: attr(data-label);
+    flex: 0 1 auto;
+    color: var(--muted);
+    font-size: .8rem;
+    text-align: left;
+  }
+
+  .table-wrap tbody tr td:last-child { border-bottom: 0; }
+
+  /* Una celda vacia con etiqueta es una linea que no dice nada. */
+  .table-wrap tbody td:empty { display: none; }
+
+  /* La linea de «no hay nada»: sin etiqueta, se lleva la tarjeta entera. */
+  .table-wrap tbody td[colspan] { display: block; text-align: left; }
+
+  /*
+   * La celda que trae un formulario se lleva el ancho entero: los botones de
+   * «rechazar / no encontrado / resolver» apretados contra el borde derecho no
+   * se aciertan con el dedo.
+   */
+  .table-wrap tbody td:has(form, input, select, button) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    text-align: left;
+  }
+
+  /* Zona tocable de 44 px, que es lo que un dedo acierta sin mirar. */
+  .table-wrap tbody td button,
+  .table-wrap tbody td input,
+  .table-wrap tbody td select,
+  .home-row-form button,
+  .home-row-form input,
+  .home-form input,
+  .home-form select { min-height: 44px; }
+
+  /*
+   * El enlace a la vivienda es la unica forma de entrar a su historial, y como
+   * texto suelto media 16 px de alto. Se le da la altura de un boton sin
+   * volverlo uno: sigue siendo un enlace.
+   */
+  .table-wrap tbody td .admin-link,
+  .admin-head-actions .admin-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .home-row-form { grid-template-columns: 1fr; gap: 10px; padding: 0; }
+  .campo-fila > span { display: block; }
+  .home-import-form .primary-button { justify-self: stretch; }
+
+  /* Los filtros, a lo ancho y uno debajo del otro. */
+  .filtros-panel { flex-direction: column; align-items: stretch !important; }
+  .filtros-panel label, .filtros-panel select, .filtros-panel input, .filtros-panel button { width: 100%; }
+  .filtros-panel select, .filtros-panel input { min-height: 44px; }
 }
