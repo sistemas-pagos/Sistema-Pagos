@@ -5,6 +5,7 @@ import { isDemoMode } from '@/src/config/env';
 import { recibosNoEntregados, type ReciboNoEntregado } from '@/src/storage/envios';
 import { getTursoClient } from '@/src/storage/turso-client';
 import { formatoRecibo } from '@/src/domain/recibo';
+import { Tabla } from '@/app/tabla';
 
 /**
  * Los recibos que el vecino no recibio.
@@ -90,29 +91,19 @@ export default async function RecibosPage() {
             <div><p className="eyebrow">Revisar</p><h2>Qué pasó con cada uno</h2></div>
             <p>El recibo ya está emitido y su número no se reutiliza: se reintenta el envío, no se emite otro.</p>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Recibo</th><th>Vivienda</th><th>Teléfono WhatsApp</th>
-                  <th>Estado</th><th>Intentos</th><th>Sin llegar</th><th>Qué revisar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.map((fila) => (
-                  <tr key={fila.envioId}>
-                    <td>{formatoRecibo(fila.reciboNumero)}</td>
-                    <td>{fila.vivienda}</td>
-                    <td>{fila.telefono}</td>
-                    <td>{MOTIVO_LABEL[fila.motivo]}</td>
-                    <td>{fila.intentos}</td>
-                    <td>{horas(fila.actualizadoEn, ahora)} h</td>
-                    <td>{queSignifica(fila)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Tabla columnas={['Recibo', 'Vivienda', 'Teléfono WhatsApp', 'Estado', 'Intentos', 'Sin llegar', 'Qué revisar']}>
+            {filas.map((fila) => (
+              <tr key={fila.envioId}>
+                <td>{formatoRecibo(fila.reciboNumero)}</td>
+                <td>{fila.vivienda}</td>
+                <td>{fila.telefono}</td>
+                <td>{MOTIVO_LABEL[fila.motivo]}</td>
+                <td>{fila.intentos}</td>
+                <td>{horas(fila.actualizadoEn, ahora)} h</td>
+                <td>{queSignifica(fila)}</td>
+              </tr>
+            ))}
+          </Tabla>
         </>
       )}
     </main>

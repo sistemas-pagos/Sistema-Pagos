@@ -358,7 +358,11 @@ cual asignarse.
 - Adaptar al formato real del CSV de BAC (pendiente de ejemplo).
 
 ### Fase 6 — Efectivo
-- Pantalla propia para el cobrador, **diseñada para teléfono**: el panel de admin sigue siendo de escritorio.
+- Pantalla propia para el cobrador, **diseñada para teléfono**. Antes esta línea decía que el
+  panel de admin seguía siendo de escritorio; **ya no**: Eduardo lo usa desde el teléfono y el
+  7 de octubre de 2026 pidió que toda la aplicación esté pensada para eso. Los encabezados de
+  sección se apilan, las tablas se vuelven tarjetas con la etiqueta de cada columna (el
+  componente `app/tabla.tsx`) y toda zona tocable mide 44 px.
 - Filtros por etapa, bloque, casa, estado, método y mes, todos como listas. Solo la referencia se escribe.
 - El cobrador ve **estado, no datos**: nunca depositante, teléfono ajeno ni monto de otra casa.
 - El monto **no se escribe**: se marcan meses y se calcula con la cuota vigente de cada uno. No se cobran meses incompletos.

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { isAdminAuthenticated } from '@/src/auth/guard';
 import { getPaymentStore } from '@/src/storage';
 import { compareHomes } from '@/src/domain/housing';
+import { Tabla } from '@/app/tabla';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,29 +71,36 @@ export default async function HomesAdminPage({ searchParams }: { searchParams: P
       </form>
 
       <div className="section-head"><div><p className="eyebrow">Inventario</p><h2>Editar viviendas</h2></div><p>Etapa, bloque y casa permanecen fijos para no romper el historial.</p></div>
-      <div className="table-wrap homes-table">
-        <table>
-          <thead><tr><th>Vivienda</th><th>Responsable</th><th>Cuota</th><th>Alta</th><th>Baja</th><th>Activa</th><th>Guardar</th></tr></thead>
-          <tbody>
-            {homes.length === 0 && <tr><td colSpan={7}>No hay viviendas registradas.</td></tr>}
-            {homes.map((home) => (
-              <tr key={home.id}>
-                <td><Link className="admin-link" href={`/admin/homes/${home.stage}/${home.block}/${home.house}`}>E{home.stage} · B{home.block} · C{home.house}</Link></td>
-                <td colSpan={6} style={{ padding: 0 }}>
-                  <form className="home-row-form" method="post" action={`/api/admin/homes/${encodeURIComponent(home.id)}`}>
-                    <input aria-label={`Responsable E${home.stage} B${home.block} C${home.house}`} name="responsible" defaultValue={home.responsible ?? ''} maxLength={160} />
-                    <input aria-label={`Cuota E${home.stage} B${home.block} C${home.house}`} name="monthlyFee" defaultValue={home.monthlyFee} min="0.01" step="0.01" type="number" required />
-                    <input aria-label={`Alta E${home.stage} B${home.block} C${home.house}`} name="startDate" defaultValue={home.startDate ?? ''} type="date" />
-                    <input aria-label={`Baja E${home.stage} B${home.block} C${home.house}`} name="endDate" defaultValue={home.endDate ?? ''} type="date" />
-                    <label className="checkbox-cell"><input name="active" type="checkbox" defaultChecked={home.active} /><span>Activa</span></label>
-                    <button type="submit">Guardar</button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Tabla columnas={['Vivienda', 'Responsable', 'Cuota', 'Alta', 'Baja', 'Activa', 'Guardar']} className="homes-table">
+        {homes.length === 0 && <tr><td colSpan={7}>No hay viviendas registradas.</td></tr>}
+        {homes.map((home) => (
+          <tr key={home.id}>
+            <td><Link className="admin-link" href={`/admin/homes/${home.stage}/${home.block}/${home.house}`}>E{home.stage} · B{home.block} · C{home.house}</Link></td>
+            <td colSpan={6} style={{ padding: 0 }}>
+              <form className="home-row-form" method="post" action={`/api/admin/homes/${encodeURIComponent(home.id)}`}>
+                <label className="campo-fila">
+                  <span aria-hidden="true">Responsable</span>
+                  <input aria-label={`Responsable E${home.stage} B${home.block} C${home.house}`} name="responsible" defaultValue={home.responsible ?? ''} maxLength={160} />
+                </label>
+                <label className="campo-fila">
+                  <span aria-hidden="true">Cuota</span>
+                  <input aria-label={`Cuota E${home.stage} B${home.block} C${home.house}`} name="monthlyFee" defaultValue={home.monthlyFee} min="0.01" step="0.01" type="number" required />
+                </label>
+                <label className="campo-fila">
+                  <span aria-hidden="true">Alta</span>
+                  <input aria-label={`Alta E${home.stage} B${home.block} C${home.house}`} name="startDate" defaultValue={home.startDate ?? ''} type="date" />
+                </label>
+                <label className="campo-fila">
+                  <span aria-hidden="true">Baja</span>
+                  <input aria-label={`Baja E${home.stage} B${home.block} C${home.house}`} name="endDate" defaultValue={home.endDate ?? ''} type="date" />
+                </label>
+                <label className="checkbox-cell"><input name="active" type="checkbox" defaultChecked={home.active} /><span>Activa</span></label>
+                <button type="submit">Guardar</button>
+              </form>
+            </td>
+          </tr>
+        ))}
+      </Tabla>
     </main>
   );
 }
