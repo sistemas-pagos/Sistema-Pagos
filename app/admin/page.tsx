@@ -88,6 +88,7 @@ export default async function AdminPage({
         <div className="admin-head-actions">
           <Link className="primary-button" href="/admin/homes">Gestionar viviendas</Link>
           <Link className="primary-button" href="/admin/recibos">Recibos no entregados</Link>
+          <Link className="primary-button" href="/admin/extracto">Cargar extracto del banco</Link>
           <Link className="primary-button" href="/admin/caja">Cierre de caja</Link>
           <Link className="primary-button" href="/admin/notas">Notas del cobrador</Link>
           {entraACobros && <Link className="primary-button" href="/cobros">Cobrar en efectivo</Link>}

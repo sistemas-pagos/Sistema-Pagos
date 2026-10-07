@@ -148,6 +148,29 @@ export async function usuarioPorTelefono(db: Db, telefono: string): Promise<Usua
 }
 
 /**
+ * El usuario detras de una sesion del panel.
+ *
+ * La sesion guarda el id y el rol, pero el rol del token puede haber quedado
+ * viejo: lo que manda es lo que dice la tabla hoy. A alguien dado de baja se le
+ * responde `undefined` aunque su cookie siga siendo valida.
+ */
+export async function usuarioPorId(db: Db, id: string): Promise<Usuario | undefined> {
+  const { rows } = await db.execute({
+    sql: 'SELECT id, nombre, rol, activo FROM usuarios WHERE id = ?',
+    args: [id],
+  });
+
+  const fila = rows[0];
+  if (!fila || Number(fila.activo) !== 1) return undefined;
+  return {
+    id: String(fila.id),
+    nombre: String(fila.nombre),
+    rol: String(fila.rol) as RolUsuario,
+    activo: true,
+  };
+}
+
+/**
  * Quien puede mandar el extracto del banco y confirmarlo. El cobrador no: cobra
  * efectivo, no concilia la cuenta, y darle esto seria darle la llave entera.
  */

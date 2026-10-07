@@ -36,6 +36,19 @@ export interface ConciliacionDeps {
 
 const ORIGEN = 'extracto-bac';
 
+/**
+ * Lo que paso al confirmar o descartar, en numeros y no en castellano.
+ *
+ * El panel y WhatsApp dicen lo mismo con palabras distintas —uno tiene botones
+ * y el otro un "SI"—, asi que la decision viaja como dato y cada superficie la
+ * redacta. El camino que verifica y emite recibos es uno solo.
+ */
+export type ResultadoConfirmacion =
+  | { tipo: 'aplicada'; verificados: number; recibos: number; sinRespaldo: number; aRevision: number }
+  | { tipo: 'cancelada' }
+  | { tipo: 'nada_esperando' }
+  | { tipo: 'ya_no_vale' };
+
 function horaLegible(fecha: Date): string {
   return fecha.toLocaleTimeString('es-HN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Tegucigalpa' });
 }
@@ -54,8 +67,15 @@ const YA_NO_VALE = 'Esa confirmación ya venció o el extracto ya se aplicó. Ma
  * sigue por el camino de siempre en vez de recibir un reproche.
  */
 export type ResultadoExtracto =
-  | { tipo: 'respuesta'; respuesta: string }
+  | { tipo: 'respuesta'; respuesta: string; motivo: MotivoExtracto }
   | { tipo: 'no_es_extracto' };
+
+/**
+ * Por que se responde eso. El texto es para WhatsApp; el codigo es para que
+ * otra pantalla pueda decirlo con sus palabras sin leer el castellano del
+ * mensaje. `resumen` es el unico caso bueno: quedo algo esperando confirmacion.
+ */
+export type MotivoExtracto = 'resumen' | 'no_cuadra' | 'otra_cuenta' | 'ya_estaba';
 
 /**
  * Lee el extracto, lo guarda y devuelve el resumen para que una persona
@@ -82,12 +102,14 @@ export async function recibirExtracto(
     // el del banco, y el tesorero tiene que enterarse en vez de que se lo
     // traten como un comprobante cualquiera.
     return error.motivo === 'balance_no_cuadra'
-      ? { tipo: 'respuesta', respuesta: NO_CUADRA }
+      ? { tipo: 'respuesta', respuesta: NO_CUADRA, motivo: 'no_cuadra' }
       : { tipo: 'no_es_extracto' };
   }
 
   const esperada = env().EXPECTED_ACCOUNT_LAST4;
-  if (esperada && ultimos4DeLaCuenta(extracto) !== esperada) return { tipo: 'respuesta', respuesta: OTRA_CUENTA };
+  if (esperada && ultimos4DeLaCuenta(extracto) !== esperada) {
+    return { tipo: 'respuesta', respuesta: OTRA_CUENTA, motivo: 'otra_cuenta' };
+  }
 
   const nuevos = depositosRecibidos(extracto);
   const conocidos = await movimientosDeBanco(deps.db);
@@ -115,9 +137,13 @@ export async function recibirExtracto(
     creadoEn: ahora.toISOString(),
   }, usuario.id);
 
-  if (!importacion.registrada) return { tipo: 'respuesta', respuesta: YA_ESTABA };
+  if (!importacion.registrada) return { tipo: 'respuesta', respuesta: YA_ESTABA, motivo: 'ya_estaba' };
 
-  return { tipo: 'respuesta', respuesta: textoDelResumen(resumen, horaLegible(expiraEn)) };
+  return {
+    tipo: 'respuesta',
+    respuesta: textoDelResumen(resumen, horaLegible(expiraEn)),
+    motivo: 'resumen',
+  };
 }
 
 /** Dos listas de movimientos sin repetir: la huella es la identidad. */
@@ -135,29 +161,63 @@ function unirPorId(conocidos: readonly BankMovement[], nuevos: readonly BankMove
  * UPDATE condicionado es lo que impide que dos "SI" seguidos —que llegan como
  * dos corridas del worker— apliquen dos veces y emitan dos recibos.
  */
-export async function aplicarConfirmacion(deps: ConciliacionDeps, usuario: Usuario): Promise<string> {
+export async function confirmarExtracto(
+  deps: ConciliacionDeps,
+  usuario: Usuario,
+): Promise<ResultadoConfirmacion> {
   const ahora = deps.ahora?.() ?? new Date();
   const pendiente = await importacionPendienteDe(deps.db, usuario.id, ahora.toISOString());
-  if (!pendiente) return NADA_ESPERANDO;
+  if (!pendiente) return { tipo: 'nada_esperando' };
 
   if (!await cerrarImportacion(deps.db, pendiente.id, 'APLICADA', usuario.id, ahora.toISOString())) {
-    return YA_NO_VALE;
+    return { tipo: 'ya_no_vale' };
   }
 
   const movimientos = await movimientosDeBanco(deps.db);
   const resultado = await reconcilePendingPayments(deps.store, movimientos, ORIGEN, ahora, usuario.id);
 
-  return [
-    `Listo. ${resultado.verified} pago(s) verificado(s) y ${resultado.receipts} recibo(s) emitido(s).`,
-    `${resultado.notFound} sin respaldo del banco, ${resultado.review} para revisar.`,
-  ].join(' ');
+  return {
+    tipo: 'aplicada',
+    verificados: resultado.verified,
+    recibos: resultado.receipts,
+    sinRespaldo: resultado.notFound,
+    aRevision: resultado.review,
+  };
+}
+
+export async function descartarExtracto(
+  deps: ConciliacionDeps,
+  usuario: Usuario,
+): Promise<ResultadoConfirmacion> {
+  const ahora = deps.ahora?.() ?? new Date();
+  const pendiente = await importacionPendienteDe(deps.db, usuario.id, ahora.toISOString());
+  if (!pendiente) return { tipo: 'nada_esperando' };
+
+  await cerrarImportacion(deps.db, pendiente.id, 'CANCELADA', usuario.id, ahora.toISOString());
+  return { tipo: 'cancelada' };
+}
+
+/** El mismo resultado, dicho para WhatsApp. */
+export function textoDeConfirmacion(resultado: ResultadoConfirmacion): string {
+  switch (resultado.tipo) {
+    case 'nada_esperando':
+      return NADA_ESPERANDO;
+    case 'ya_no_vale':
+      return YA_NO_VALE;
+    case 'cancelada':
+      return 'Descartado. No se aplicó nada.';
+    case 'aplicada':
+      return [
+        `Listo. ${resultado.verificados} pago(s) verificado(s) y ${resultado.recibos} recibo(s) emitido(s).`,
+        `${resultado.sinRespaldo} sin respaldo del banco, ${resultado.aRevision} para revisar.`,
+      ].join(' ');
+  }
+}
+
+export async function aplicarConfirmacion(deps: ConciliacionDeps, usuario: Usuario): Promise<string> {
+  return textoDeConfirmacion(await confirmarExtracto(deps, usuario));
 }
 
 export async function cancelarConfirmacion(deps: ConciliacionDeps, usuario: Usuario): Promise<string> {
-  const ahora = deps.ahora?.() ?? new Date();
-  const pendiente = await importacionPendienteDe(deps.db, usuario.id, ahora.toISOString());
-  if (!pendiente) return NADA_ESPERANDO;
-
-  await cerrarImportacion(deps.db, pendiente.id, 'CANCELADA', usuario.id, ahora.toISOString());
-  return 'Descartado. No se aplicó nada.';
+  return textoDeConfirmacion(await descartarExtracto(deps, usuario));
 }
